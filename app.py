@@ -1,14 +1,15 @@
-import streamlit as st
 import os
+import json
 import hashlib
 import tempfile
 import base64
+import numpy as np
+import streamlit as st
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI
-import chromadb
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from llama_parse import LlamaParse
@@ -18,8 +19,62 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 llama_api_key = os.getenv("LLAMA_CLOUD_API_KEY")
 
-chroma_client = chromadb.PersistentClient(path="./chroma_db")
-collection = chroma_client.get_or_create_collection(name="proof_lab_knowledge")
+# ─────────────────────────────────────────────
+# Pure-Python Vector Store (replaces chromadb)
+# ─────────────────────────────────────────────
+
+VECTOR_DB_FILE = Path("vector_store.json")
+
+def load_vector_store():
+    if VECTOR_DB_FILE.exists():
+        with open(VECTOR_DB_FILE, "r") as f:
+            return json.load(f)
+    return {"ids": [], "embeddings": [], "documents": [], "metadatas": []}
+
+def save_vector_store(store):
+    with open(VECTOR_DB_FILE, "w") as f:
+        json.dump(store, f)
+
+def vector_store_add(store, chunk_id, embedding, document, metadata):
+    if chunk_id in store["ids"]:
+        return False
+    store["ids"].append(chunk_id)
+    store["embeddings"].append(embedding)
+    store["documents"].append(document)
+    store["metadatas"].append(metadata)
+    save_vector_store(store)
+    return True
+
+def vector_store_query(store, query_embedding, n_results=5):
+    if not store["embeddings"]:
+        return [], []
+    embeddings = np.array(store["embeddings"], dtype=np.float32)
+    query = np.array(query_embedding, dtype=np.float32)
+    # Cosine similarity
+    norms = np.linalg.norm(embeddings, axis=1) * np.linalg.norm(query)
+    norms = np.where(norms == 0, 1e-10, norms)
+    similarities = np.dot(embeddings, query) / norms
+    top_indices = np.argsort(similarities)[::-1][:n_results]
+    docs = [store["documents"][i] for i in top_indices]
+    metas = [store["metadatas"][i] for i in top_indices]
+    return docs, metas
+
+def vector_store_get_all(store):
+    return store["metadatas"]
+
+def vector_store_delete(store, document_title):
+    indices_to_keep = [i for i, m in enumerate(store["metadatas"]) if m.get("document_title") != document_title]
+    deleted = len(store["ids"]) - len(indices_to_keep)
+    store["ids"] = [store["ids"][i] for i in indices_to_keep]
+    store["embeddings"] = [store["embeddings"][i] for i in indices_to_keep]
+    store["documents"] = [store["documents"][i] for i in indices_to_keep]
+    store["metadatas"] = [store["metadatas"][i] for i in indices_to_keep]
+    save_vector_store(store)
+    return deleted
+
+# Load vector store into session state once
+if "vector_store" not in st.session_state:
+    st.session_state.vector_store = load_vector_store()
 
 ASK_HISTORY_FILE = Path("ask_history.csv")
 SOP_HISTORY_FILE = Path("sop_history.csv")
@@ -267,8 +322,8 @@ def show_history(title, file_path, columns, download_name):
 
 
 def get_document_library():
-    all_items = collection.get(include=["metadatas"])
-    metadatas = all_items.get("metadatas", [])
+    store = st.session_state.vector_store
+    metadatas = vector_store_get_all(store)
     docs = {}
     for meta in metadatas:
         doc = meta.get("document_title", "Unknown document")
@@ -277,16 +332,14 @@ def get_document_library():
         docs[doc]["chunks"] += 1
         page = meta.get("page")
         if page not in [None, "N/A", ""]:
-            docs[doc]["pages"].add(page)
+            docs[doc]["pages"].add(str(page))
     return [{"Document": info["document"], "Pages": len(info["pages"]), "Chunks": info["chunks"], "Uploaded": info["uploaded_at"]} for info in docs.values()]
 
 
 def delete_document(document_title):
-    all_items = collection.get(where={"document_title": document_title}, include=["metadatas"])
-    ids = all_items.get("ids", [])
-    if ids:
-        collection.delete(ids=ids)
-    return len(ids)
+    store = st.session_state.vector_store
+    deleted = vector_store_delete(store, document_title)
+    return deleted
 
 
 def extract_text_with_pypdf(uploaded_file):
@@ -306,7 +359,8 @@ def extract_text_with_llamaparse(file_path):
     return [{"page": "OCR", "text": combined_text}]
 
 
-def add_chunks_to_chroma(uploaded_file_name, extracted_pages, page_count, extraction_method):
+def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extraction_method):
+    store = st.session_state.vector_store
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1200, chunk_overlap=200,
         separators=["\n# ", "\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""]
@@ -321,16 +375,18 @@ def add_chunks_to_chroma(uploaded_file_name, extracted_pages, page_count, extrac
                 continue
             chunk_hash = hashlib.md5(chunk.encode("utf-8")).hexdigest()
             chunk_id = f"{uploaded_file_name}_page_{page_data['page']}_{chunk_hash}"
-            existing = collection.get(ids=[chunk_id])
-            if len(existing["ids"]) == 0:
-                embedding = client.embeddings.create(model="text-embedding-3-small", input=chunk).data[0].embedding
-                collection.add(
-                    ids=[chunk_id], embeddings=[embedding], documents=[chunk],
-                    metadatas=[{"document_title": uploaded_file_name, "page": page_data["page"],
-                                "chunk_number": chunk_index, "chunk_hash": chunk_hash,
-                                "chunking_method": "recursive_semantic", "extraction_method": extraction_method,
-                                "uploaded_at": upload_time, "page_count": page_count}]
-                )
+            embedding = client.embeddings.create(model="text-embedding-3-small", input=chunk).data[0].embedding
+            added = vector_store_add(store, chunk_id, embedding, chunk, {
+                "document_title": uploaded_file_name,
+                "page": page_data["page"],
+                "chunk_number": chunk_index,
+                "chunk_hash": chunk_hash,
+                "chunking_method": "recursive_semantic",
+                "extraction_method": extraction_method,
+                "uploaded_at": upload_time,
+                "page_count": page_count
+            })
+            if added:
                 added_chunks += 1
             else:
                 skipped_chunks += 1
@@ -338,10 +394,11 @@ def add_chunks_to_chroma(uploaded_file_name, extracted_pages, page_count, extrac
 
 
 def retrieve_context(question, n_results=5):
+    store = st.session_state.vector_store
+    if not store["embeddings"]:
+        return "No documents in knowledge base yet.", []
     query_embedding = client.embeddings.create(model="text-embedding-3-small", input=question).data[0].embedding
-    results = collection.query(query_embeddings=[query_embedding], n_results=n_results)
-    documents = results["documents"][0]
-    metadatas = results["metadatas"][0]
+    documents, metadatas = vector_store_query(store, query_embedding, n_results=n_results)
     context_blocks = []
     for i, (doc, meta) in enumerate(zip(documents, metadatas), start=1):
         source_label = (f"[Source {i}: {meta.get('document_title', 'Unknown')} | "
@@ -441,7 +498,7 @@ with st.sidebar:
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:0.6rem;color:#333;text-align:center;'>Proof Lab AI · v2.0</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.6rem;color:#333;text-align:center;'>Proof Lab AI · v2.1</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
@@ -484,7 +541,7 @@ with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
 
             if force_ocr or total_text_length < 500:
                 if not llama_api_key:
-                    st.error("Missing LLAMA_CLOUD_API_KEY in your .env file.")
+                    st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
                     st.stop()
                 st.warning("Using LlamaParse OCR...")
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
@@ -494,7 +551,7 @@ with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
                 page_count = "OCR"
                 extraction_method = "llamaparse_ocr"
 
-            added_chunks, skipped_chunks = add_chunks_to_chroma(
+            added_chunks, skipped_chunks = add_chunks_to_store(
                 uploaded_file.name, extracted_pages, page_count, extraction_method
             )
         st.success(f"✅ Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
