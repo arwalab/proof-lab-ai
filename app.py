@@ -86,6 +86,7 @@ RD_HISTORY_FILE   = Path("rd_history.csv")
 
 MODE_ICONS = {
     "Home":                 "",
+    "Upload Knowledge Base": "",
     "Ask Knowledge Base":   "",
     "SOP Creator":          "",
     "Batch Tracker":        "",
@@ -716,6 +717,7 @@ with st.sidebar:
     # Clean text-only nav links (no icons, no buttons)
     nav_items = [
         ("Home", "Home"),
+        ("Upload Knowledge Base", "Upload Knowledge Base"),
         ("Ask Knowledge Base", "Ask Knowledge Base"),
         ("SOP Creator", "SOP Creator"),
         ("Batch Tracker", "Batch Tracker"),
@@ -889,10 +891,10 @@ if mode == "Home":
 
 
 # ─────────────────────────────────────────────
-# Header + Upload PDF (shown on all non-Home modes)
+# Header (shown on all non-Home modes)
 # ─────────────────────────────────────────────
 
-if mode != "Home":
+if mode not in ("Home", "Upload Knowledge Base"):
     st.markdown(f"""
     <div class="proof-header">
         <div class="pl-logo-svg">{PROOF_LAB_LOGO_SVG}</div>
@@ -903,11 +905,28 @@ if mode != "Home":
     </div>
     """, unsafe_allow_html=True)
 
-if mode != "Home":
-    with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
-        force_ocr   = st.checkbox("Force OCR with LlamaParse (for scanned PDFs)")
-        st.markdown("<div class='input-hint'>⌘ Drag & drop or click to browse</div>", unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("Upload a PDF", type="pdf", label_visibility="collapsed")
+st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
+# Mode: Upload Knowledge Base
+# ─────────────────────────────────────────────
+
+if mode == "Upload Knowledge Base":
+    mode_hero("📂", "Upload Knowledge Base",
+              "Add PDF documents to your knowledge base for AI-powered search and retrieval.",
+              "Upload")
+
+    up_col, lib_col = st.columns([3, 2])
+
+    with up_col:
+        st.markdown("""
+        <div class="pl-card">
+            <div class="pl-card-title">Upload a PDF Document</div>
+        """, unsafe_allow_html=True)
+
+        force_ocr = st.checkbox("Force OCR with LlamaParse (for scanned / image-based PDFs)")
+        uploaded_file = st.file_uploader("Select a PDF file", type="pdf", label_visibility="visible")
 
         if uploaded_file:
             with st.spinner("Processing PDF — extracting and embedding chunks..."):
@@ -941,7 +960,62 @@ if mode != "Home":
             st.toast(f"✅ Added {added_chunks} chunks from '{uploaded_file.name}'", icon="📄")
             st.success(f"Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
 
-st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="pl-card" style="margin-top:18px;">
+            <div class="pl-card-title">Tips for Best Results</div>
+            <div style="font-size:0.83rem;color:#9BB7D4;line-height:2.0;">
+                <b style="color:#FEF7CF;">Text-based PDFs</b> are processed automatically with PyPDF — fast and accurate.<br>
+                <b style="color:#FEF7CF;">Scanned / image PDFs</b> require OCR — enable the checkbox above before uploading.<br>
+                <b style="color:#FEF7CF;">Duplicate chunks</b> are automatically detected and skipped.<br>
+                <b style="color:#FEF7CF;">Supported formats:</b> PDF only. For Word or Excel, export to PDF first.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with lib_col:
+        st.markdown("""
+        <div class="pl-card">
+            <div class="pl-card-title">Document Library</div>
+        """, unsafe_allow_html=True)
+
+        library_rows_up = get_document_library()
+        if library_rows_up:
+            total_chunks_up = sum(r["Chunks"] for r in library_rows_up)
+            total_docs_up   = len(library_rows_up)
+            st.markdown(f"""
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <div style="flex:1;background:#1a0f20;border:1px solid rgba(155,183,212,0.22);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:#FEF7CF;">{total_docs_up}</div>
+                    <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Documents</div>
+                </div>
+                <div style="flex:1;background:#1a0f20;border:1px solid rgba(155,183,212,0.22);border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:#FEF7CF;">{total_chunks_up}</div>
+                    <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Chunks</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            library_df_up = pd.DataFrame(library_rows_up)
+            st.dataframe(library_df_up, use_container_width=True, height=200)
+
+            pl_divider("Delete a Document")
+            doc_names_up    = [row["Document"] for row in library_rows_up]
+            selected_doc_up = st.selectbox("Select document to remove", doc_names_up)
+            if st.button("Delete Selected Document", key="delete_doc_up", use_container_width=True):
+                deleted_count = delete_document(selected_doc_up)
+                st.toast(f"Deleted {deleted_count} chunks from '{selected_doc_up}'", icon="🗑")
+                st.rerun()
+        else:
+            st.markdown("""
+            <div style="text-align:center;padding:32px 0;">
+                <div style="font-size:2.5rem;margin-bottom:12px;">📂</div>
+                <div style="font-size:0.85rem;color:#9BB7D4;">No documents yet.</div>
+                <div style="font-size:0.78rem;color:#757577;margin-top:4px;">Upload a PDF to get started.</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
