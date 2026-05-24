@@ -114,19 +114,19 @@ st.markdown("""
 
 /* ── Design tokens ── */
 :root {
-    --bg-main:     #0d0d0d;
-    --bg-card:     #161616;
-    --bg-sidebar:  #111111;
-    --accent:      #c9a84c;
-    --accent-light:#e8c97a;
-    --accent-dim:  rgba(201,168,76,0.12);
-    --text-primary:#f0ece4;
-    --text-muted:  #9e9a93;
-    --text-faint:  #555;
-    --border:      rgba(201,168,76,0.18);
-    --border-solid:#2a2a2a;
+    --bg-main:     #1a0f20;
+    --bg-card:     #2C1332;
+    --bg-sidebar:  #200d28;
+    --accent:      #FEF7CF;
+    --accent-light:#ffffff;
+    --accent-dim:  rgba(254,247,207,0.10);
+    --text-primary:#FEF7CF;
+    --text-muted:  #9BB7D4;
+    --text-faint:  #757577;
+    --border:      rgba(155,183,212,0.22);
+    --border-solid:#3a2545;
     --radius:      12px;
-    --shadow:      0 4px 24px rgba(0,0,0,0.4);
+    --shadow:      0 4px 24px rgba(0,0,0,0.5);
 }
 
 /* ── Base ── */
@@ -146,7 +146,7 @@ html, body, [data-testid="stAppViewContainer"] {
 /* ── Custom logo SVG ── */
 .pl-logo-svg {
     width: 52px; height: 52px; flex-shrink: 0;
-    filter: drop-shadow(0 0 12px rgba(201,168,76,0.5));
+    filter: drop-shadow(0 0 12px rgba(155,183,212,0.5));
 }
 
 /* ── Header ── */
@@ -181,12 +181,12 @@ html, body, [data-testid="stAppViewContainer"] {
 .mode-hero::before {
     content: '';
     position: absolute; inset: 0;
-    background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 60%);
+    background: linear-gradient(135deg, rgba(155,183,212,0.08) 0%, transparent 60%);
     pointer-events: none;
 }
 .mode-hero .hero-icon {
     font-size: 2.4rem; flex-shrink: 0;
-    filter: drop-shadow(0 0 8px rgba(201,168,76,0.4));
+    filter: drop-shadow(0 0 8px rgba(155,183,212,0.4));
 }
 .mode-hero .hero-title {
     font-family: 'Playfair Display', serif;
@@ -202,7 +202,7 @@ html, body, [data-testid="stAppViewContainer"] {
     transform: translateY(-50%);
     font-size: 5rem; opacity: 0.04;
     font-family: 'Playfair Display', serif;
-    font-weight: 700; color: var(--accent);
+    font-weight: 700; color: #9BB7D4;
     pointer-events: none; user-select: none;
     white-space: nowrap;
 }
@@ -298,7 +298,7 @@ html, body, [data-testid="stAppViewContainer"] {
 /* ── Inputs ── */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea {
-    background-color: #1c1c1c !important;
+    background-color: #2a1a35 !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     color: var(--text-primary) !important;
@@ -307,8 +307,8 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .stTextInput > div > div > input:focus,
 .stTextArea > div > div > textarea:focus {
-    border-color: var(--accent) !important;
-    box-shadow: 0 0 0 2px rgba(201,168,76,0.15) !important;
+    border-color: #9BB7D4 !important;
+    box-shadow: 0 0 0 2px rgba(254,247,207,0.15) !important;
     outline: none !important;
 }
 .input-hint {
@@ -318,7 +318,7 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ── Selectbox ── */
 .stSelectbox > div > div {
-    background-color: #1c1c1c !important;
+    background-color: #2a1a35 !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     color: var(--text-primary) !important;
@@ -326,30 +326,30 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ── Buttons ── */
 .stButton > button {
-    background: linear-gradient(135deg, var(--accent), #8b6914) !important;
-    color: #0d0d0d !important; font-weight: 700 !important;
+    background: linear-gradient(135deg, #9BB7D4, #5a7fa8) !important;
+    color: #1a0f20 !important; font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
     border: none !important; border-radius: 8px !important;
     padding: 10px 24px !important; font-size: 0.88rem !important;
     letter-spacing: 0.4px !important;
     transition: all 0.2s ease !important;
-    box-shadow: 0 2px 14px rgba(201,168,76,0.2) !important;
+    box-shadow: 0 2px 14px rgba(155,183,212,0.2) !important;
 }
 .stButton > button:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 5px 22px rgba(201,168,76,0.38) !important;
+    box-shadow: 0 5px 22px rgba(155,183,212,0.38) !important;
 }
 .stDownloadButton > button {
-    background: transparent !important; color: var(--accent) !important;
+    background: transparent !important; color: #9BB7D4 !important;
     border: 1px solid var(--border) !important; border-radius: 8px !important;
     font-family: 'Inter', sans-serif !important; font-weight: 600 !important;
 }
 .stDownloadButton > button:hover {
-    background: var(--accent-dim) !important; border-color: var(--accent) !important;
+    background: var(--accent-dim) !important; border-color: #9BB7D4 !important;
 }
 [data-testid="stFormSubmitButton"] > button {
-    background: linear-gradient(135deg, var(--accent), #8b6914) !important;
-    color: #0d0d0d !important; font-weight: 700 !important;
+    background: linear-gradient(135deg, #9BB7D4, #5a7fa8) !important;
+    color: #1a0f20 !important; font-weight: 700 !important;
     border: none !important; border-radius: 8px !important;
     width: 100% !important; padding: 12px !important;
     font-size: 0.92rem !important;
@@ -363,7 +363,7 @@ html, body, [data-testid="stAppViewContainer"] {
     margin-bottom: 10px !important;
 }
 [data-testid="stChatInput"] > div {
-    background: #1c1c1c !important;
+    background: #2a1a35 !important;
     border: 1px solid var(--border) !important;
     border-radius: 12px !important;
 }
@@ -371,14 +371,14 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* ── Expanders ── */
 .streamlit-expanderHeader {
-    background: #1a1a1a !important;
+    background: #261030 !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     color: var(--text-muted) !important;
     font-size: 0.82rem !important;
 }
 .streamlit-expanderContent {
-    background: #181818 !important;
+    background: #220e2e !important;
     border: 1px solid var(--border) !important;
     border-top: none !important;
 }
@@ -393,8 +393,8 @@ html, body, [data-testid="stAppViewContainer"] {
     background-color: var(--bg-card) !important;
 }
 [data-testid="stDataFrame"] thead tr th {
-    background-color: #1e1e1e !important;
-    color: var(--accent) !important;
+    background-color: #2e1540 !important;
+    color: #9BB7D4 !important;
     font-size: 0.72rem !important;
     text-transform: uppercase !important;
     letter-spacing: 1px !important;
@@ -404,25 +404,25 @@ html, body, [data-testid="stAppViewContainer"] {
     background-color: var(--bg-card) !important;
     color: var(--text-primary) !important;
     font-size: 0.82rem !important;
-    border-bottom: 1px solid #1e1e1e !important;
+    border-bottom: 1px solid #2e1540 !important;
 }
 [data-testid="stDataFrame"] tbody tr:hover td {
-    background-color: #1e1e1e !important;
+    background-color: #2e1540 !important;
 }
 
 /* ── File uploader ── */
 [data-testid="stFileUploader"] {
-    background: #1a1a1a !important;
+    background: #261030 !important;
     border: 1.5px dashed var(--border) !important;
     border-radius: var(--radius) !important;
 }
-[data-testid="stFileUploader"]:hover { border-color: var(--accent) !important; }
+[data-testid="stFileUploader"]:hover { border-color: #9BB7D4 !important; }
 
 /* ── Alerts — styled ── */
 [data-testid="stAlert"] {
     border-radius: 8px !important;
     border-left: 3px solid var(--accent) !important;
-    background: #1a1a1a !important;
+    background: #261030 !important;
 }
 
 /* ── Labels ── */
@@ -436,8 +436,8 @@ label, .stTextInput label, .stTextArea label,
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-main); }
-::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+::-webkit-scrollbar-thumb { background: #3a2545; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9BB7D4; }
 
 /* ── Headings ── */
 h2, h3 { font-family: 'Playfair Display', serif !important; color: var(--text-primary) !important; }
@@ -643,15 +643,15 @@ PROOF_LAB_LOGO_SVG = """
   <circle cx="26" cy="26" r="26" fill="url(#grad)"/>
   <defs>
     <radialGradient id="grad" cx="35%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#e8c97a"/>
-      <stop offset="100%" stop-color="#7a5c10"/>
+      <stop offset="0%" stop-color="#9BB7D4"/>
+      <stop offset="100%" stop-color="#2C1332"/>
     </radialGradient>
   </defs>
   <!-- Flask body -->
   <path d="M20 14 L20 26 L14 38 Q13 40 15 41 L37 41 Q39 40 38 38 L32 26 L32 14 Z"
-        fill="none" stroke="#0d0d0d" stroke-width="2" stroke-linejoin="round"/>
+        fill="none" stroke="#1a0f20" stroke-width="2" stroke-linejoin="round"/>
   <!-- Flask neck top -->
-  <rect x="19" y="12" width="14" height="3" rx="1.5" fill="#0d0d0d"/>
+  <rect x="19" y="12" width="14" height="3" rx="1.5" fill="#1a0f20"/>
   <!-- Liquid inside -->
   <path d="M16.5 35 Q18 30 26 30 Q34 30 35.5 35 L37 41 Q39 40 38 38 L32 26 L32 14 L20 14 L20 26 L14 38 Q13 40 15 41 Z"
         fill="rgba(0,0,0,0.35)"/>
@@ -665,17 +665,17 @@ PROOF_LAB_LOGO_SVG = """
 with st.sidebar:
     # Logo + brand
     st.markdown(f"""
-    <div style="padding:20px 0 16px 0;border-bottom:1px solid rgba(201,168,76,0.18);margin-bottom:20px;
+    <div style="padding:20px 0 16px 0;border-bottom:1px solid rgba(254,247,207,0.18);margin-bottom:20px;
                 display:flex;align-items:center;gap:12px;">
         <div class="pl-logo-svg">{PROOF_LAB_LOGO_SVG}</div>
         <div>
-            <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#c9a84c;line-height:1.2;">Proof Lab AI</div>
-            <div style="font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:2px;margin-top:3px;">Bakery Intelligence</div>
+            <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#FEF7CF;line-height:1.2;">Proof Lab AI</div>
+            <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:2px;margin-top:3px;">Bakery Intelligence</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;padding-left:4px;'>Navigation</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;padding-left:4px;'>Navigation</div>", unsafe_allow_html=True)
 
     # Vertical nav buttons
     for m, icon in MODE_ICONS.items():
@@ -691,8 +691,8 @@ with st.sidebar:
         st.toast("Chat history cleared.", icon="🗑")
         st.rerun()
 
-    st.markdown("<div style='height:1px;background:rgba(201,168,76,0.12);margin:12px 0 16px 0;'></div>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;padding-left:4px;'>Knowledge Base</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1px;background:rgba(254,247,207,0.12);margin:12px 0 16px 0;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;padding-left:4px;'>Knowledge Base</div>", unsafe_allow_html=True)
 
     library_rows = get_document_library()
 
@@ -701,13 +701,13 @@ with st.sidebar:
         total_docs   = len(library_rows)
         st.markdown(f"""
         <div style="display:flex;gap:8px;margin-bottom:12px;">
-            <div style="flex:1;background:#1a1a1a;border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:10px;text-align:center;">
-                <div style="font-size:1.3rem;font-weight:700;color:#c9a84c;">{total_docs}</div>
-                <div style="font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1px;">Docs</div>
+            <div style="flex:1;background:#261030;border:1px solid rgba(254,247,207,0.18);border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:1.3rem;font-weight:700;color:#FEF7CF;">{total_docs}</div>
+                <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Docs</div>
             </div>
-            <div style="flex:1;background:#1a1a1a;border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:10px;text-align:center;">
-                <div style="font-size:1.3rem;font-weight:700;color:#c9a84c;">{total_chunks}</div>
-                <div style="font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1px;">Chunks</div>
+            <div style="flex:1;background:#261030;border:1px solid rgba(254,247,207,0.18);border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:1.3rem;font-weight:700;color:#FEF7CF;">{total_chunks}</div>
+                <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Chunks</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -721,7 +721,7 @@ with st.sidebar:
             st.rerun()
     else:
         st.markdown("""
-        <div style="background:#1a1a1a;border:1px dashed rgba(201,168,76,0.18);border-radius:8px;
+        <div style="background:#261030;border:1px dashed rgba(254,247,207,0.18);border-radius:8px;
                     padding:18px;text-align:center;">
             <div style="font-size:1.4rem;margin-bottom:6px;">📂</div>
             <div style="font-size:0.75rem;color:#555;">No documents yet.<br>Upload a PDF to get started.</div>
@@ -729,7 +729,7 @@ with st.sidebar:
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:0.58rem;color:#2a2a2a;text-align:center;'>Proof Lab AI · v3.0</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.58rem;color:#3a2545;text-align:center;'>Proof Lab AI · v3.0</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
@@ -808,18 +808,18 @@ if mode == "Ask Knowledge Base":
         st.markdown("""
         <div class="pl-card">
             <div class="pl-card-title">How it works</div>
-            <div style="font-size:0.82rem;color:#9e9a93;line-height:1.8;">
+            <div style="font-size:0.82rem;color:#9BB7D4;line-height:1.8;">
                 Your question is embedded and matched against uploaded documents using cosine similarity.
                 The top chunks are sent to GPT-4.1 as context.
             </div>
             <div style="margin-top:16px;" class="pl-card-title">Tips</div>
-            <div style="font-size:0.78rem;color:#9e9a93;margin-top:6px;line-height:1.9;">
+            <div style="font-size:0.78rem;color:#9BB7D4;margin-top:6px;line-height:1.9;">
                 • Be specific in your questions<br>
                 • Reference product types<br>
                 • Ask follow-up questions<br>
                 • Check sources for citations
             </div>
-            <div style="margin-top:16px;font-size:0.68rem;color:#444;border-top:1px solid rgba(201,168,76,0.1);padding-top:12px;">
+            <div style="margin-top:16px;font-size:0.68rem;color:#757577;border-top:1px solid rgba(254,247,207,0.1);padding-top:12px;">
                 ⌘ Enter &nbsp;·&nbsp; Submit message
             </div>
         </div>
@@ -891,7 +891,7 @@ if mode == "SOP Creator":
         st.markdown("""
         <div class="pl-card">
             <div class="pl-card-title">SOP Structure</div>
-            <div style="font-size:0.78rem;color:#9e9a93;line-height:2.1;">
+            <div style="font-size:0.78rem;color:#9BB7D4;line-height:2.1;">
                 1. SOP Title<br>2. Purpose<br>3. Product Overview<br>
                 4. Required Equipment<br>5. Ingredients / Components<br>
                 6. Mise en Place<br>7. Production Procedure<br>
@@ -1013,7 +1013,7 @@ if mode == "Batch Tracker":
             bake_temp  = st.text_input("Bake Temp",  placeholder="180°C")
             bake_time  = st.text_input("Bake Time",  placeholder="18 min")
 
-        st.markdown("<div style='height:1px;background:rgba(201,168,76,0.1);margin:12px 0;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1px;background:rgba(254,247,207,0.1);margin:12px 0;'></div>", unsafe_allow_html=True)
         note_col1, note_col2 = st.columns(2)
         with note_col1:
             formula_notes = st.text_area("Formula Notes",  height=100)
