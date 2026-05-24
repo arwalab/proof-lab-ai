@@ -25,15 +25,38 @@ llama_api_key = os.getenv("LLAMA_CLOUD_API_KEY")
 
 VECTOR_DB_FILE = Path("vector_store.json")
 
+EMPTY_STORE = lambda: {"ids": [], "embeddings": [], "documents": [], "metadatas": []}
+
 def load_vector_store():
     if VECTOR_DB_FILE.exists():
-        with open(VECTOR_DB_FILE, "r") as f:
-            return json.load(f)
-    return {"ids": [], "embeddings": [], "documents": [], "metadatas": []}
+        try:
+            with open(VECTOR_DB_FILE, "r") as f:
+                data = json.load(f)
+            # Validate structure
+            if all(k in data for k in ("ids", "embeddings", "documents", "metadatas")):
+                return data
+            else:
+                return EMPTY_STORE()
+        except (json.JSONDecodeError, ValueError, OSError):
+            # Corrupted file — back it up and start fresh
+            backup = VECTOR_DB_FILE.with_suffix(".bak.json")
+            try:
+                VECTOR_DB_FILE.rename(backup)
+            except Exception:
+                pass
+            return EMPTY_STORE()
+    return EMPTY_STORE()
 
 def save_vector_store(store):
-    with open(VECTOR_DB_FILE, "w") as f:
-        json.dump(store, f)
+    # Atomic write: save to temp file first, then replace
+    tmp_file = VECTOR_DB_FILE.with_suffix(".tmp.json")
+    try:
+        with open(tmp_file, "w") as f:
+            json.dump(store, f)
+        tmp_file.replace(VECTOR_DB_FILE)
+    except Exception:
+        if tmp_file.exists():
+            tmp_file.unlink()
 
 def vector_store_add(store, chunk_id, embedding, document, metadata):
     if chunk_id in store["ids"]:
