@@ -922,43 +922,84 @@ if mode == "Upload Knowledge Base":
     with up_col:
         st.markdown("""
         <div class="pl-card">
-            <div class="pl-card-title">Upload a PDF Document</div>
+            <div class="pl-card-title">Upload PDF Documents</div>
         """, unsafe_allow_html=True)
 
         force_ocr = st.checkbox("Force OCR with LlamaParse (for scanned / image-based PDFs)")
-        uploaded_file = st.file_uploader("Select a PDF file", type="pdf", label_visibility="visible")
+        uploaded_files = st.file_uploader(
+            "Select one or more PDF files",
+            type="pdf",
+            accept_multiple_files=True,
+            label_visibility="visible"
+        )
 
-        if uploaded_file:
-            with st.spinner("Processing PDF — extracting and embedding chunks..."):
-                extracted_pages  = []
-                page_count       = 0
-                extraction_method = "pypdf"
+        if uploaded_files:
+            st.markdown(f"""
+            <div style="font-size:0.82rem;color:#9BB7D4;margin:8px 0 14px 0;">
+                <b style="color:#FEF7CF;">{len(uploaded_files)}</b> file(s) selected — click Process to begin.
+            </div>""", unsafe_allow_html=True)
 
-                if not force_ocr:
-                    try:
-                        extracted_pages, page_count = extract_text_with_pypdf(uploaded_file)
-                    except Exception:
-                        extracted_pages = []
+            if st.button(f"Process {len(uploaded_files)} PDF(s)", key="bulk_upload_btn", use_container_width=True):
+                progress_bar = st.progress(0, text="Starting...")
+                results = []
 
-                total_text_length = sum(len(p["text"]) for p in extracted_pages)
+                for idx, uploaded_file in enumerate(uploaded_files):
+                    progress_pct = int((idx / len(uploaded_files)) * 100)
+                    progress_bar.progress(progress_pct, text=f"Processing {uploaded_file.name} ({idx+1}/{len(uploaded_files)})...")
 
-                if force_ocr or total_text_length < 500:
-                    if not llama_api_key:
-                        st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
-                        st.stop()
-                    st.warning("Switching to LlamaParse OCR for scanned content...")
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                        temp_file.write(uploaded_file.getbuffer())
-                        temp_path = temp_file.name
-                    extracted_pages   = extract_text_with_llamaparse(temp_path)
-                    page_count        = "OCR"
-                    extraction_method = "llamaparse_ocr"
+                    extracted_pages  = []
+                    page_count       = 0
+                    extraction_method = "pypdf"
 
-                added_chunks, skipped_chunks = add_chunks_to_store(
-                    uploaded_file.name, extracted_pages, page_count, extraction_method
-                )
-            st.toast(f"✅ Added {added_chunks} chunks from '{uploaded_file.name}'", icon="📄")
-            st.success(f"Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
+                    if not force_ocr:
+                        try:
+                            extracted_pages, page_count = extract_text_with_pypdf(uploaded_file)
+                        except Exception:
+                            extracted_pages = []
+
+                    total_text_length = sum(len(p["text"]) for p in extracted_pages)
+
+                    if force_ocr or total_text_length < 500:
+                        if not llama_api_key:
+                            st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
+                            st.stop()
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                            temp_file.write(uploaded_file.getbuffer())
+                            temp_path = temp_file.name
+                        extracted_pages   = extract_text_with_llamaparse(temp_path)
+                        page_count        = "OCR"
+                        extraction_method = "llamaparse_ocr"
+
+                    added_chunks, skipped_chunks = add_chunks_to_store(
+                        uploaded_file.name, extracted_pages, page_count, extraction_method
+                    )
+                    results.append({
+                        "File": uploaded_file.name,
+                        "Method": extraction_method,
+                        "Added": added_chunks,
+                        "Skipped": skipped_chunks
+                    })
+
+                progress_bar.progress(100, text="All files processed!")
+                st.toast(f"✅ Processed {len(uploaded_files)} file(s) successfully!", icon="📂")
+
+                # Summary table
+                results_df = pd.DataFrame(results)
+                total_added   = results_df["Added"].sum()
+                total_skipped = results_df["Skipped"].sum()
+                st.markdown(f"""
+                <div style="background:#1a0f20;border:1px solid rgba(155,183,212,0.22);border-radius:10px;
+                            padding:14px 18px;margin:14px 0;">
+                    <span style="color:#FEF7CF;font-weight:700;font-size:0.95rem;">✅ Batch complete</span>
+                    <span style="color:#9BB7D4;font-size:0.83rem;margin-left:12px;">
+                        {len(uploaded_files)} files &nbsp;·&nbsp;
+                        <b style="color:#FEF7CF;">{total_added}</b> chunks added &nbsp;·&nbsp;
+                        {total_skipped} duplicates skipped
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
