@@ -130,10 +130,36 @@ st.markdown("""
 }
 
 /* ── Base ── */
-html, body, [data-testid="stAppViewContainer"] {
+html, body, [data-testid="stAppViewContainer"],
+[data-testid="stHeader"], header, [data-testid="stToolbar"],
+[data-testid="stDecoration"], [data-testid="stStatusWidget"] {
     background-color: var(--bg-main) !important;
     color: var(--text-primary) !important;
     font-family: 'Inter', sans-serif !important;
+}
+
+/* ── Hide white top bar / toolbar ── */
+[data-testid="stHeader"] {
+    background: var(--bg-main) !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+[data-testid="stToolbar"] {
+    background: var(--bg-main) !important;
+}
+[data-testid="stDecoration"] {
+    background: var(--bg-main) !important;
+    display: none !important;
+}
+/* Main content top padding fix */
+[data-testid="stAppViewBlockContainer"] {
+    padding-top: 2rem !important;
+}
+/* Streamlit top deploy/share button bar */
+.stApp > header {
+    background-color: var(--bg-main) !important;
+}
+.stApp {
+    background-color: var(--bg-main) !important;
 }
 
 /* ── Sidebar ── */
