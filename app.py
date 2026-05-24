@@ -1055,33 +1055,67 @@ if mode == "Upload Knowledge Base":
                 actual_sec  = int(actual_time) % 60
                 actual_label = f"{actual_min}m {actual_sec}s" if actual_min > 0 else f"{actual_sec}s"
 
-                progress_bar.progress(100, text=f"All files processed in {actual_label}!")
-                st.toast(f"✅ {len(uploaded_files)} file(s) uploaded to knowledge base!", icon="📂")
+                progress_bar.progress(100, text=f"✅ All {len(uploaded_files)} file(s) processed in {actual_label}!")
 
-                # ── Completion confirmation banner ──
+                # ── Store completion result in session state so it persists ──
                 results_df    = pd.DataFrame(results)
                 total_added   = results_df["Added"].sum()
                 total_skipped = results_df["Skipped"].sum()
+                st.session_state["upload_done"] = {
+                    "files": len(uploaded_files),
+                    "added": int(total_added),
+                    "skipped": int(total_skipped),
+                    "time": actual_label,
+                    "results": results
+                }
+
+                # ── Toast notification ──
+                st.toast(f"✅ Upload complete — {total_added} chunks added!", icon="📂")
+
+                # ── Prominent completion banner ──
                 st.markdown(f"""
-                <div style="background:linear-gradient(135deg,rgba(155,183,212,0.12),rgba(44,19,50,0.6));
-                            border:1px solid rgba(155,183,212,0.35);border-radius:12px;
-                            padding:20px 24px;margin:16px 0;">
-                    <div style="font-size:1.1rem;font-weight:700;color:#FEF7CF;margin-bottom:6px;">
-                        ✅ Upload Complete
+                <div style="background:linear-gradient(135deg,rgba(100,200,120,0.12),rgba(44,19,50,0.7));
+                            border:2px solid rgba(100,200,120,0.5);border-radius:14px;
+                            padding:24px 28px;margin:20px 0;
+                            box-shadow:0 0 24px rgba(100,200,120,0.15);">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                        <span style="font-size:2rem;">✅</span>
+                        <div>
+                            <div style="font-size:1.2rem;font-weight:800;color:#a8f0b8;letter-spacing:0.02em;">
+                                Upload Complete!
+                            </div>
+                            <div style="font-size:0.82rem;color:#9BB7D4;margin-top:2px;">
+                                Your documents are now searchable in the knowledge base.
+                            </div>
+                        </div>
                     </div>
-                    <div style="font-size:0.83rem;color:#9BB7D4;line-height:2.0;">
-                        <b style="color:#FEF7CF;">{len(uploaded_files)}</b> file(s) processed &nbsp;·&nbsp;
-                        <b style="color:#FEF7CF;">{total_added}</b> chunks added to knowledge base &nbsp;·&nbsp;
-                        <b style="color:#757577;">{total_skipped}</b> duplicates skipped &nbsp;·&nbsp;
-                        Completed in <b style="color:#FEF7CF;">{actual_label}</b>
+                    <div style="display:flex;gap:24px;flex-wrap:wrap;margin:14px 0 10px 0;">
+                        <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                            <div style="font-size:1.5rem;font-weight:800;color:#FEF7CF;">{len(uploaded_files)}</div>
+                            <div style="font-size:0.75rem;color:#9BB7D4;">Files Processed</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                            <div style="font-size:1.5rem;font-weight:800;color:#a8f0b8;">{total_added}</div>
+                            <div style="font-size:0.75rem;color:#9BB7D4;">Chunks Added</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                            <div style="font-size:1.5rem;font-weight:800;color:#757577;">{total_skipped}</div>
+                            <div style="font-size:0.75rem;color:#9BB7D4;">Duplicates Skipped</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                            <div style="font-size:1.5rem;font-weight:800;color:#9BB7D4;">{actual_label}</div>
+                            <div style="font-size:0.75rem;color:#9BB7D4;">Time Taken</div>
+                        </div>
                     </div>
-                    <div style="font-size:0.78rem;color:#757577;margin-top:8px;">
-                        Your documents are now searchable. Go to <i>Ask Knowledge Base</i> to start querying.
+                    <div style="font-size:0.8rem;color:#a8f0b8;margin-top:6px;">
+                        → Go to <b>Ask Knowledge Base</b> in the sidebar to start querying your documents.
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # ── Per-file breakdown table ──
+                st.markdown("<div style='font-size:0.82rem;color:#9BB7D4;margin:8px 0 4px 0;font-weight:600;letter-spacing:0.05em;'>FILE BREAKDOWN</div>", unsafe_allow_html=True)
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
-                st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
