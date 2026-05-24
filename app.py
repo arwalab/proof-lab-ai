@@ -85,17 +85,18 @@ RD_HISTORY_FILE   = Path("rd_history.csv")
 # ─────────────────────────────────────────────
 
 MODE_ICONS = {
-    "Ask Knowledge Base":   "💬",
-    "SOP Creator":          "📋",
-    "Batch Tracker":        "📊",
-    "Vision Analyzer":      "🔬",
-    "Recipe R&D Generator": "⚗️",
-    "Recipe Evaluator":     "✅",
+    "Home":                 "",
+    "Ask Knowledge Base":   "",
+    "SOP Creator":          "",
+    "Batch Tracker":        "",
+    "Vision Analyzer":      "",
+    "Recipe R&D Generator": "",
+    "Recipe Evaluator":     "",
 }
 
 # Read mode from session state early so page_config can use it
 if "active_mode" not in st.session_state:
-    st.session_state.active_mode = "Ask Knowledge Base"
+    st.session_state.active_mode = "Home"
 
 st.set_page_config(
     page_title=f"Proof Lab AI — {st.session_state.active_mode}",
@@ -233,29 +234,38 @@ html, body, [data-testid="stAppViewContainer"],
     white-space: nowrap;
 }
 
-/* ── Sidebar nav buttons ── */
-.nav-btn {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px; border-radius: 8px;
-    cursor: pointer; margin-bottom: 4px;
-    font-size: 0.85rem; font-weight: 500;
-    color: var(--text-muted);
-    border: 1px solid transparent;
-    transition: all 0.15s ease;
-    text-decoration: none;
+/* ── Sidebar nav — text only, hide button chrome ── */
+[data-testid="stSidebar"] .stButton > button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    padding: 0 !important;
+    margin: -36px 0 0 0 !important;
+    height: 36px !important;
+    width: 100% !important;
+    position: relative !important;
+    z-index: 2 !important;
+    cursor: pointer !important;
 }
-.nav-btn:hover {
-    background: var(--accent-dim);
-    color: var(--accent-light);
-    border-color: var(--border);
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
-.nav-btn.active {
-    background: var(--accent-dim);
-    color: var(--accent);
-    border-color: var(--border);
-    font-weight: 600;
+/* Clear chat button — keep visible */
+[data-testid="stSidebar"] button[kind="secondary"],
+[data-testid="stSidebar"] .stButton:last-of-type > button {
+    background: transparent !important;
+    border: 1px solid rgba(155,183,212,0.22) !important;
+    color: #9BB7D4 !important;
+    font-size: 0.78rem !important;
+    padding: 6px 12px !important;
+    margin: 0 !important;
+    height: auto !important;
+    border-radius: 6px !important;
 }
-.nav-btn .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
 
 /* ── Cards ── */
 .pl-card {
@@ -701,18 +711,34 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;padding-left:4px;'>Navigation</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;padding-left:4px;'>Navigation</div>", unsafe_allow_html=True)
 
-    # Vertical nav buttons
-    for m, icon in MODE_ICONS.items():
-        is_active = st.session_state.active_mode == m
-        active_class = "active" if is_active else ""
-        if st.button(f"{icon}  {m}", key=f"nav_{m}", use_container_width=True):
-            st.session_state.active_mode = m
+    # Clean text-only nav links (no icons, no buttons)
+    nav_items = [
+        ("Home", "Home"),
+        ("Ask Knowledge Base", "Ask Knowledge Base"),
+        ("SOP Creator", "SOP Creator"),
+        ("Batch Tracker", "Batch Tracker"),
+        ("Vision Analyzer", "Vision Analyzer"),
+        ("Recipe R&D Generator", "Recipe R&D Generator"),
+        ("Recipe Evaluator", "Recipe Evaluator"),
+    ]
+    for nav_key, nav_label in nav_items:
+        is_active = st.session_state.active_mode == nav_key
+        active_style = "color:#FEF7CF;font-weight:600;border-left:2px solid #9BB7D4;padding-left:10px;" if is_active else "color:#9BB7D4;font-weight:400;border-left:2px solid transparent;padding-left:10px;"
+        st.markdown(
+            f"""<div style='{active_style}font-size:0.88rem;padding-top:8px;padding-bottom:8px;
+            cursor:pointer;transition:all 0.15s ease;letter-spacing:0.2px;'>
+            {nav_label}</div>""",
+            unsafe_allow_html=True
+        )
+        # Invisible button overlay for click handling
+        if st.button(nav_label, key=f"nav_{nav_key}", use_container_width=True):
+            st.session_state.active_mode = nav_key
             st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🗑  Clear Chat History", use_container_width=True):
+    if st.button("Clear Chat History", key="clear_chat", use_container_width=True):
         st.session_state.messages = []
         st.toast("Chat history cleared.", icon="🗑")
         st.rerun()
@@ -764,57 +790,156 @@ with st.sidebar:
 
 mode = st.session_state.active_mode
 
-st.markdown(f"""
-<div class="proof-header">
-    <div class="pl-logo-svg">{PROOF_LAB_LOGO_SVG}</div>
-    <div>
-        <h1>Proof Lab AI</h1>
-        <div class="tagline">Bakery Intelligence Platform</div>
+# ─────────────────────────────────────────────
+# Mode: Home
+# ─────────────────────────────────────────────
+
+if mode == "Home":
+    library_rows_home = get_document_library()
+    total_docs_home   = len(library_rows_home)
+    total_chunks_home = sum(r["Chunks"] for r in library_rows_home)
+    batch_df_home     = load_batches()
+    total_batches_home = len(batch_df_home)
+
+    st.markdown(f"""
+    <div style="padding:48px 0 32px 0;">
+        <div class="pl-logo-svg" style="margin-bottom:20px;">{PROOF_LAB_LOGO_SVG}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:2.8rem;font-weight:700;
+                    color:#FEF7CF;line-height:1.15;margin-bottom:10px;">
+            Proof Lab AI
+        </div>
+        <div style="font-size:0.78rem;color:#9BB7D4;text-transform:uppercase;
+                    letter-spacing:3px;margin-bottom:32px;">
+            Bakery Intelligence Platform
+        </div>
+        <div style="font-size:1rem;color:#9BB7D4;max-width:560px;line-height:1.8;margin-bottom:40px;">
+            Your AI-powered R&D lab — built for The Proof Lab team to query knowledge,
+            build SOPs, track batches, analyze product photos, and generate new concepts.
+        </div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+    # Stats row
+    st.markdown(f"""
+    <div class="metric-row">
+        <div class="metric-card">
+            <div class="metric-value">{total_docs_home}</div>
+            <div class="metric-label">Documents</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{total_chunks_home}</div>
+            <div class="metric-label">Knowledge Chunks</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{total_batches_home}</div>
+            <div class="metric-label">Batches Logged</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">6</div>
+            <div class="metric-label">AI Modules</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    pl_divider("Modules")
+
+    # Module cards grid
+    modules = [
+        ("Ask Knowledge Base",   "Query your uploaded documents with AI-powered semantic search and retrieval."),
+        ("SOP Creator",          "Generate professional, staff-ready Standard Operating Procedures from rough notes."),
+        ("Batch Tracker",        "Log every production batch with full parameters and AI-powered analysis."),
+        ("Vision Analyzer",      "Upload a product photo for AI visual diagnosis and corrective guidance."),
+        ("Recipe R&D Generator", "Invent technically original bakery concepts based on flavor and texture goals."),
+        ("Recipe Evaluator",     "Critically evaluate test recipes for formula balance and brand fit."),
+    ]
+    col1, col2, col3 = st.columns(3)
+    cols = [col1, col2, col3]
+    for i, (mod_name, mod_desc) in enumerate(modules):
+        with cols[i % 3]:
+            st.markdown(f"""
+            <div class="pl-card" style="cursor:pointer;transition:all 0.2s ease;">
+                <div class="pl-card-title">{mod_name}</div>
+                <div style="font-size:0.82rem;color:#9BB7D4;line-height:1.7;">{mod_desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Open {mod_name}", key=f"home_btn_{mod_name}", use_container_width=True):
+                st.session_state.active_mode = mod_name
+                st.rerun()
+
+    pl_divider("Getting Started")
+    st.markdown("""
+    <div class="pl-card">
+        <div class="pl-card-title">Quick Start Guide</div>
+        <div style="font-size:0.85rem;color:#9BB7D4;line-height:2.1;">
+            <b style="color:#FEF7CF;">1. Upload your documents</b> &nbsp;—&nbsp;
+                Use the Upload PDF expander in any module to add baking references, recipes, or SOPs to your knowledge base.<br>
+            <b style="color:#FEF7CF;">2. Ask questions</b> &nbsp;—&nbsp;
+                Navigate to <i>Ask Knowledge Base</i> and ask anything about your uploaded documents.<br>
+            <b style="color:#FEF7CF;">3. Create SOPs</b> &nbsp;—&nbsp;
+                Paste rough notes into <i>SOP Creator</i> to generate a professional, staff-ready procedure.<br>
+            <b style="color:#FEF7CF;">4. Log batches</b> &nbsp;—&nbsp;
+                Use <i>Batch Tracker</i> to record every production run and ask AI to analyze patterns.<br>
+            <b style="color:#FEF7CF;">5. Analyze photos</b> &nbsp;—&nbsp;
+                Upload a product image in <i>Vision Analyzer</i> for instant visual diagnosis.<br>
+            <b style="color:#FEF7CF;">6. Invent new concepts</b> &nbsp;—&nbsp;
+                Use <i>Recipe R&D Generator</i> to create original, technically sound bakery concepts.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# Upload PDF
+# Header + Upload PDF (shown on all non-Home modes)
 # ─────────────────────────────────────────────
 
-with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
-    force_ocr   = st.checkbox("Force OCR with LlamaParse (for scanned PDFs)")
-    st.markdown("<div class='input-hint'>⌘ Drag & drop or click to browse</div>", unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Upload a PDF", type="pdf", label_visibility="collapsed")
+if mode != "Home":
+    st.markdown(f"""
+    <div class="proof-header">
+        <div class="pl-logo-svg">{PROOF_LAB_LOGO_SVG}</div>
+        <div>
+            <h1>Proof Lab AI</h1>
+            <div class="tagline">Bakery Intelligence Platform</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if uploaded_file:
-        with st.spinner("Processing PDF — extracting and embedding chunks..."):
-            extracted_pages  = []
-            page_count       = 0
-            extraction_method = "pypdf"
+if mode != "Home":
+    with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
+        force_ocr   = st.checkbox("Force OCR with LlamaParse (for scanned PDFs)")
+        st.markdown("<div class='input-hint'>⌘ Drag & drop or click to browse</div>", unsafe_allow_html=True)
+        uploaded_file = st.file_uploader("Upload a PDF", type="pdf", label_visibility="collapsed")
 
-            if not force_ocr:
-                try:
-                    extracted_pages, page_count = extract_text_with_pypdf(uploaded_file)
-                except Exception:
-                    extracted_pages = []
+        if uploaded_file:
+            with st.spinner("Processing PDF — extracting and embedding chunks..."):
+                extracted_pages  = []
+                page_count       = 0
+                extraction_method = "pypdf"
 
-            total_text_length = sum(len(p["text"]) for p in extracted_pages)
+                if not force_ocr:
+                    try:
+                        extracted_pages, page_count = extract_text_with_pypdf(uploaded_file)
+                    except Exception:
+                        extracted_pages = []
 
-            if force_ocr or total_text_length < 500:
-                if not llama_api_key:
-                    st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
-                    st.stop()
-                st.warning("Switching to LlamaParse OCR for scanned content...")
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                    temp_file.write(uploaded_file.getbuffer())
-                    temp_path = temp_file.name
-                extracted_pages   = extract_text_with_llamaparse(temp_path)
-                page_count        = "OCR"
-                extraction_method = "llamaparse_ocr"
+                total_text_length = sum(len(p["text"]) for p in extracted_pages)
 
-            added_chunks, skipped_chunks = add_chunks_to_store(
-                uploaded_file.name, extracted_pages, page_count, extraction_method
-            )
-        st.toast(f"✅ Added {added_chunks} chunks from '{uploaded_file.name}'", icon="📄")
-        st.success(f"Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
+                if force_ocr or total_text_length < 500:
+                    if not llama_api_key:
+                        st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
+                        st.stop()
+                    st.warning("Switching to LlamaParse OCR for scanned content...")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                        temp_file.write(uploaded_file.getbuffer())
+                        temp_path = temp_file.name
+                    extracted_pages   = extract_text_with_llamaparse(temp_path)
+                    page_count        = "OCR"
+                    extraction_method = "llamaparse_ocr"
+
+                added_chunks, skipped_chunks = add_chunks_to_store(
+                    uploaded_file.name, extracted_pages, page_count, extraction_method
+                )
+            st.toast(f"✅ Added {added_chunks} chunks from '{uploaded_file.name}'", icon="📄")
+            st.success(f"Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
