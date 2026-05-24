@@ -116,6 +116,7 @@ MODE_ICONS = {
     "Vision Analyzer":      "",
     "Recipe R&D Generator": "",
     "Recipe Evaluator":     "",
+    "Data Migration":       "",
 }
 
 # Read mode from session state early so page_config can use it
@@ -746,7 +747,8 @@ with st.sidebar:
         ("Batch Tracker", "Batch Tracker"),
         ("Vision Analyzer", "Vision Analyzer"),
         ("Recipe R&D Generator", "Recipe R&D Generator"),
-        ("Recipe Evaluator", "Recipe Evaluator"),
+                ("Recipe Evaluator",     "Recipe Evaluator"),
+        ("Data Migration",       "Data Migration"),
     ]
     for nav_key, nav_label in nav_items:
         is_active = st.session_state.active_mode == nav_key
@@ -1709,3 +1711,260 @@ Be direct, practical, and technically specific. If the recipe is missing key dat
                 with st.expander("📎 Knowledge sources used"):
                     st.text(sources_text)
             st.toast("Recipe evaluation complete.", icon="✅")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DATA MIGRATION PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+if mode == "Data Migration":
+    import time as _mig_time
+
+    mode_hero("🚚", "Data Migration",
+              "Restore all your history data and rebuild the knowledge base from your local files in one go.")
+
+    st.markdown("""
+    <div class="pl-card" style="margin-bottom:18px;">
+        <div class="pl-card-title">How Migration Works</div>
+        <div style="font-size:0.83rem;color:#9BB7D4;line-height:2.0;">
+            <b style="color:#FEF7CF;">Step 1 — History CSVs:</b> Upload your history files to instantly restore all past records (Ask, SOP, R&D, Vision, Batch).<br>
+            <b style="color:#FEF7CF;">Step 2 — PDF Documents:</b> Upload all your PDFs at once to rebuild the full knowledge base.<br>
+            <b style="color:#FEF7CF;">Duplicate safe:</b> Re-uploading the same file is safe — duplicates are automatically skipped.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    pl_divider("Step 1 — Restore History Data")
+
+    # ── CSV Migration ──
+    st.markdown("""
+    <div class="pl-card">
+        <div class="pl-card-title">Upload History CSV Files</div>
+        <div style="font-size:0.82rem;color:#9BB7D4;margin-bottom:12px;">
+            Upload one or more of your history CSV files. Each file will be merged with any existing records — no data will be lost.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    CSV_MAP = {
+        "ask_history.csv":    (ASK_HISTORY_FILE,    "Ask Knowledge Base history"),
+        "sop_history.csv":    (SOP_HISTORY_FILE,     "SOP Creator history"),
+        "rd_history.csv":     (RD_HISTORY_FILE,      "Recipe R&D history"),
+        "vision_history.csv": (VISION_HISTORY_FILE,  "Vision Analyzer history"),
+        "batch_tracker.csv":  (BATCH_FILE,           "Batch Tracker records"),
+    }
+
+    uploaded_csvs = st.file_uploader(
+        "Select history CSV files (ask_history.csv, sop_history.csv, rd_history.csv, vision_history.csv, batch_tracker.csv)",
+        type=["csv"],
+        accept_multiple_files=True,
+        key="migration_csv_uploader"
+    )
+
+    if uploaded_csvs:
+        st.markdown(f"<div style='font-size:0.82rem;color:#9BB7D4;margin:8px 0;'>{len(uploaded_csvs)} CSV file(s) selected</div>", unsafe_allow_html=True)
+        if st.button("Restore History Data", key="restore_csv_btn", use_container_width=True):
+            csv_results = []
+            for csv_file in uploaded_csvs:
+                fname = csv_file.name.lower()
+                matched = None
+                for key, (target_path, label) in CSV_MAP.items():
+                    if key in fname:
+                        matched = (target_path, label)
+                        break
+
+                if matched is None:
+                    csv_results.append({"File": csv_file.name, "Status": "⚠️ Unrecognised", "Records": 0, "Action": "Skipped"})
+                    continue
+
+                target_path, label = matched
+                try:
+                    new_df = pd.read_csv(csv_file)
+                    if target_path.exists():
+                        existing_df = pd.read_csv(target_path)
+                        merged_df = pd.concat([existing_df, new_df], ignore_index=True).drop_duplicates()
+                        added = len(merged_df) - len(existing_df)
+                    else:
+                        merged_df = new_df
+                        added = len(merged_df)
+                    merged_df.to_csv(target_path, index=False)
+                    csv_results.append({"File": csv_file.name, "Status": "✅ Restored", "Records": len(merged_df), "Action": f"+{added} new rows"})
+                except Exception as e:
+                    csv_results.append({"File": csv_file.name, "Status": "❌ Error", "Records": 0, "Action": str(e)})
+
+            # Summary banner
+            restored = sum(1 for r in csv_results if "✅" in r["Status"])
+            total_records = sum(r["Records"] for r in csv_results)
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,rgba(100,200,120,0.12),rgba(44,19,50,0.7));
+                        border:2px solid rgba(100,200,120,0.5);border-radius:14px;
+                        padding:20px 24px;margin:16px 0;
+                        box-shadow:0 0 20px rgba(100,200,120,0.12);">
+                <div style="font-size:1.1rem;font-weight:800;color:#a8f0b8;margin-bottom:6px;">✅ History Restored!</div>
+                <div style="font-size:0.83rem;color:#9BB7D4;line-height:2.0;">
+                    <b style="color:#FEF7CF;">{restored}</b> file(s) restored &nbsp;·&nbsp;
+                    <b style="color:#FEF7CF;">{total_records}</b> total records now in the app
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame(csv_results), use_container_width=True, hide_index=True)
+            st.toast(f"✅ {restored} history file(s) restored!", icon="📋")
+
+    pl_divider("Step 2 — Rebuild Knowledge Base")
+
+    # ── PDF Migration ──
+    st.markdown("""
+    <div class="pl-card">
+        <div class="pl-card-title">Upload All PDF Documents</div>
+        <div style="font-size:0.82rem;color:#9BB7D4;margin-bottom:12px;">
+            Select all your PDF files at once. The app will process them sequentially, embed each chunk, and add them to the knowledge base.
+            Duplicate documents are automatically skipped.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    migration_pdfs = st.file_uploader(
+        "Select all PDF documents to migrate",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="migration_pdf_uploader"
+    )
+
+    force_ocr_mig = st.checkbox("Force OCR for scanned PDFs", value=False, key="migration_ocr")
+
+    if migration_pdfs:
+        # Quick estimate
+        total_size_mb = sum(f.size for f in migration_pdfs) / (1024 * 1024)
+        est_chunks_mig = int(len(migration_pdfs) * 60)
+        est_secs_mig   = int(est_chunks_mig * 0.55)
+        est_min_mig    = est_secs_mig // 60
+        est_sec_mig    = est_secs_mig % 60
+        est_label_mig  = f"{est_min_mig}m {est_sec_mig}s" if est_min_mig > 0 else f"{est_sec_mig}s"
+
+        st.markdown(f"""
+        <div style="background:rgba(155,183,212,0.08);border:1px solid rgba(155,183,212,0.2);
+                    border-radius:10px;padding:14px 18px;margin:10px 0;
+                    display:flex;gap:28px;flex-wrap:wrap;">
+            <div style="text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:#FEF7CF;">{len(migration_pdfs)}</div>
+                <div style="font-size:0.72rem;color:#9BB7D4;">Files Selected</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:#FEF7CF;">{total_size_mb:.1f} MB</div>
+                <div style="font-size:0.72rem;color:#9BB7D4;">Total Size</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:#9BB7D4;">~{est_chunks_mig}</div>
+                <div style="font-size:0.72rem;color:#9BB7D4;">Est. Chunks</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:1.3rem;font-weight:800;color:#9BB7D4;">~{est_label_mig}</div>
+                <div style="font-size:0.72rem;color:#9BB7D4;">Est. Time</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button(f"🚀 Start Migration — {len(migration_pdfs)} PDF(s)", key="migration_pdf_btn", use_container_width=True):
+            mig_start = _mig_time.time()
+            mig_progress = st.progress(0, text="Starting migration...")
+            mig_results = []
+            mig_status_box = st.empty()
+
+            for idx, pdf_file in enumerate(migration_pdfs):
+                pct = int((idx / len(migration_pdfs)) * 100)
+                elapsed_mig = _mig_time.time() - mig_start
+                remaining_mig = max(0, est_secs_mig - int(elapsed_mig))
+                rem_min_m = remaining_mig // 60
+                rem_sec_m = remaining_mig % 60
+                rem_label_m = f"{rem_min_m}m {rem_sec_m}s remaining" if rem_min_m > 0 else f"{rem_sec_m}s remaining"
+
+                mig_progress.progress(pct, text=f"Processing {pdf_file.name} ({idx+1}/{len(migration_pdfs)}) — ~{rem_label_m}")
+                mig_status_box.markdown(
+                    f"<div style='font-size:0.8rem;color:#9BB7D4;'>📄 {pdf_file.name}</div>",
+                    unsafe_allow_html=True
+                )
+
+                extracted_pages = []
+                page_count = 0
+                extraction_method = "pypdf"
+
+                if not force_ocr_mig:
+                    try:
+                        extracted_pages, page_count = extract_text_with_pypdf(pdf_file)
+                    except Exception:
+                        extracted_pages = []
+
+                total_text_len = sum(len(p["text"]) for p in extracted_pages)
+
+                if force_ocr_mig or total_text_len < 500:
+                    if not llama_api_key:
+                        st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
+                        st.stop()
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                        tmp.write(pdf_file.getbuffer())
+                        tmp_path = tmp.name
+                    extracted_pages   = extract_text_with_llamaparse(tmp_path)
+                    page_count        = "OCR"
+                    extraction_method = "llamaparse_ocr"
+
+                added_c, skipped_c = add_chunks_to_store(
+                    pdf_file.name, extracted_pages, page_count, extraction_method
+                )
+                mig_results.append({
+                    "File": pdf_file.name,
+                    "Method": extraction_method,
+                    "Chunks Added": added_c,
+                    "Duplicates Skipped": skipped_c
+                })
+
+            mig_status_box.empty()
+            actual_mig_time = _mig_time.time() - mig_start
+            actual_mig_min  = int(actual_mig_time) // 60
+            actual_mig_sec  = int(actual_mig_time) % 60
+            actual_mig_label = f"{actual_mig_min}m {actual_mig_sec}s" if actual_mig_min > 0 else f"{actual_mig_sec}s"
+
+            mig_progress.progress(100, text=f"✅ Migration complete in {actual_mig_label}!")
+
+            mig_df = pd.DataFrame(mig_results)
+            total_mig_added   = mig_df["Chunks Added"].sum()
+            total_mig_skipped = mig_df["Duplicates Skipped"].sum()
+
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,rgba(100,200,120,0.12),rgba(44,19,50,0.7));
+                        border:2px solid rgba(100,200,120,0.5);border-radius:14px;
+                        padding:24px 28px;margin:20px 0;
+                        box-shadow:0 0 24px rgba(100,200,120,0.15);">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                    <span style="font-size:2rem;">🚀</span>
+                    <div>
+                        <div style="font-size:1.2rem;font-weight:800;color:#a8f0b8;">Migration Complete!</div>
+                        <div style="font-size:0.82rem;color:#9BB7D4;margin-top:2px;">
+                            All documents have been embedded and added to the knowledge base.
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:24px;flex-wrap:wrap;margin:14px 0 10px 0;">
+                    <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                        <div style="font-size:1.5rem;font-weight:800;color:#FEF7CF;">{len(migration_pdfs)}</div>
+                        <div style="font-size:0.75rem;color:#9BB7D4;">Files Processed</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                        <div style="font-size:1.5rem;font-weight:800;color:#a8f0b8;">{total_mig_added}</div>
+                        <div style="font-size:0.75rem;color:#9BB7D4;">Chunks Added</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                        <div style="font-size:1.5rem;font-weight:800;color:#757577;">{total_mig_skipped}</div>
+                        <div style="font-size:0.75rem;color:#9BB7D4;">Duplicates Skipped</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
+                        <div style="font-size:1.5rem;font-weight:800;color:#9BB7D4;">{actual_mig_label}</div>
+                        <div style="font-size:0.75rem;color:#9BB7D4;">Time Taken</div>
+                    </div>
+                </div>
+                <div style="font-size:0.8rem;color:#a8f0b8;margin-top:6px;">
+                    → Go to <b>Ask Knowledge Base</b> to start querying all your migrated documents.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<div style='font-size:0.82rem;color:#9BB7D4;margin:8px 0 4px 0;font-weight:600;letter-spacing:0.05em;'>FILE BREAKDOWN</div>", unsafe_allow_html=True)
+            st.dataframe(mig_df, use_container_width=True, hide_index=True)
+            st.toast(f"🚀 Migration complete — {total_mig_added} chunks added!", icon="📚")
