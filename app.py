@@ -934,18 +934,65 @@ if mode == "Upload Knowledge Base":
         )
 
         if uploaded_files:
+            # ── Time estimation ──
+            import time as _time
+            total_size_mb = sum(f.size for f in uploaded_files) / (1024 * 1024)
+            # Quick pre-scan: count extractable chars to estimate chunks
+            est_chunks_total = 0
+            for f in uploaded_files:
+                try:
+                    reader_est = PdfReader(f)
+                    sample_text = ""
+                    for pg in reader_est.pages[:min(3, len(reader_est.pages))]:
+                        t = pg.extract_text()
+                        if t:
+                            sample_text += t
+                    avg_chars = len(sample_text) / min(3, len(reader_est.pages)) if reader_est.pages else 0
+                    est_chunks_total += max(1, int((avg_chars * len(reader_est.pages)) / 1000))
+                    f.seek(0)  # reset file pointer
+                except Exception:
+                    est_chunks_total += 30  # fallback estimate
+            est_seconds = max(15, int(est_chunks_total * 0.55))
+            est_min = est_seconds // 60
+            est_sec = est_seconds % 60
+            est_label = f"{est_min}m {est_sec}s" if est_min > 0 else f"{est_sec}s"
+
             st.markdown(f"""
-            <div style="font-size:0.82rem;color:#9BB7D4;margin:8px 0 14px 0;">
-                <b style="color:#FEF7CF;">{len(uploaded_files)}</b> file(s) selected — click Process to begin.
-            </div>""", unsafe_allow_html=True)
+            <div style="background:#1a0f20;border:1px solid rgba(155,183,212,0.22);border-radius:10px;
+                        padding:14px 18px;margin:10px 0 14px 0;display:flex;gap:24px;align-items:center;">
+                <div style="text-align:center;">
+                    <div style="font-size:1.4rem;font-weight:700;color:#FEF7CF;">{len(uploaded_files)}</div>
+                    <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Files</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:1.4rem;font-weight:700;color:#FEF7CF;">{total_size_mb:.1f} MB</div>
+                    <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Total Size</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:1.4rem;font-weight:700;color:#FEF7CF;">~{est_chunks_total}</div>
+                    <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Est. Chunks</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:1.4rem;font-weight:700;color:#9BB7D4;">~{est_label}</div>
+                    <div style="font-size:0.6rem;color:#757577;text-transform:uppercase;letter-spacing:1px;">Est. Time</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
             if st.button(f"Process {len(uploaded_files)} PDF(s)", key="bulk_upload_btn", use_container_width=True):
+                start_time = _time.time()
                 progress_bar = st.progress(0, text="Starting...")
                 results = []
 
                 for idx, uploaded_file in enumerate(uploaded_files):
                     progress_pct = int((idx / len(uploaded_files)) * 100)
-                    progress_bar.progress(progress_pct, text=f"Processing {uploaded_file.name} ({idx+1}/{len(uploaded_files)})...")
+                    elapsed = _time.time() - start_time
+                    remaining = max(0, est_seconds - int(elapsed))
+                    rem_min = remaining // 60
+                    rem_sec = remaining % 60
+                    rem_label = f"{rem_min}m {rem_sec}s remaining" if rem_min > 0 else f"{rem_sec}s remaining"
+                    progress_bar.progress(progress_pct,
+                        text=f"Processing {uploaded_file.name} ({idx+1}/{len(uploaded_files)}) — ~{rem_label}")
 
                     extracted_pages  = []
                     page_count       = 0
@@ -980,22 +1027,34 @@ if mode == "Upload Knowledge Base":
                         "Skipped": skipped_chunks
                     })
 
-                progress_bar.progress(100, text="All files processed!")
-                st.toast(f"✅ Processed {len(uploaded_files)} file(s) successfully!", icon="📂")
+                actual_time = _time.time() - start_time
+                actual_min  = int(actual_time) // 60
+                actual_sec  = int(actual_time) % 60
+                actual_label = f"{actual_min}m {actual_sec}s" if actual_min > 0 else f"{actual_sec}s"
 
-                # Summary table
-                results_df = pd.DataFrame(results)
+                progress_bar.progress(100, text=f"All files processed in {actual_label}!")
+                st.toast(f"✅ {len(uploaded_files)} file(s) uploaded to knowledge base!", icon="📂")
+
+                # ── Completion confirmation banner ──
+                results_df    = pd.DataFrame(results)
                 total_added   = results_df["Added"].sum()
                 total_skipped = results_df["Skipped"].sum()
                 st.markdown(f"""
-                <div style="background:#1a0f20;border:1px solid rgba(155,183,212,0.22);border-radius:10px;
-                            padding:14px 18px;margin:14px 0;">
-                    <span style="color:#FEF7CF;font-weight:700;font-size:0.95rem;">✅ Batch complete</span>
-                    <span style="color:#9BB7D4;font-size:0.83rem;margin-left:12px;">
-                        {len(uploaded_files)} files &nbsp;·&nbsp;
-                        <b style="color:#FEF7CF;">{total_added}</b> chunks added &nbsp;·&nbsp;
-                        {total_skipped} duplicates skipped
-                    </span>
+                <div style="background:linear-gradient(135deg,rgba(155,183,212,0.12),rgba(44,19,50,0.6));
+                            border:1px solid rgba(155,183,212,0.35);border-radius:12px;
+                            padding:20px 24px;margin:16px 0;">
+                    <div style="font-size:1.1rem;font-weight:700;color:#FEF7CF;margin-bottom:6px;">
+                        ✅ Upload Complete
+                    </div>
+                    <div style="font-size:0.83rem;color:#9BB7D4;line-height:2.0;">
+                        <b style="color:#FEF7CF;">{len(uploaded_files)}</b> file(s) processed &nbsp;·&nbsp;
+                        <b style="color:#FEF7CF;">{total_added}</b> chunks added to knowledge base &nbsp;·&nbsp;
+                        <b style="color:#757577;">{total_skipped}</b> duplicates skipped &nbsp;·&nbsp;
+                        Completed in <b style="color:#FEF7CF;">{actual_label}</b>
+                    </div>
+                    <div style="font-size:0.78rem;color:#757577;margin-top:8px;">
+                        Your documents are now searchable. Go to <i>Ask Knowledge Base</i> to start querying.
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
