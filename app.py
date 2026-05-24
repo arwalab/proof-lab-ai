@@ -50,7 +50,6 @@ def vector_store_query(store, query_embedding, n_results=5):
         return [], []
     embeddings = np.array(store["embeddings"], dtype=np.float32)
     query = np.array(query_embedding, dtype=np.float32)
-    # Cosine similarity
     norms = np.linalg.norm(embeddings, axis=1) * np.linalg.norm(query)
     norms = np.where(norms == 0, 1e-10, norms)
     similarities = np.dot(embeddings, query) / norms
@@ -72,69 +71,90 @@ def vector_store_delete(store, document_title):
     save_vector_store(store)
     return deleted
 
-# Load vector store into session state once
 if "vector_store" not in st.session_state:
     st.session_state.vector_store = load_vector_store()
 
-ASK_HISTORY_FILE = Path("ask_history.csv")
-SOP_HISTORY_FILE = Path("sop_history.csv")
-BATCH_FILE = Path("batch_tracker.csv")
+ASK_HISTORY_FILE  = Path("ask_history.csv")
+SOP_HISTORY_FILE  = Path("sop_history.csv")
+BATCH_FILE        = Path("batch_tracker.csv")
 VISION_HISTORY_FILE = Path("vision_history.csv")
-RD_HISTORY_FILE = Path("rd_history.csv")
+RD_HISTORY_FILE   = Path("rd_history.csv")
 
 # ─────────────────────────────────────────────
-# Page config & global CSS
+# Page config — dynamic title per mode
 # ─────────────────────────────────────────────
+
+MODE_ICONS = {
+    "Ask Knowledge Base":   "💬",
+    "SOP Creator":          "📋",
+    "Batch Tracker":        "📊",
+    "Vision Analyzer":      "🔬",
+    "Recipe R&D Generator": "⚗️",
+    "Recipe Evaluator":     "✅",
+}
+
+# Read mode from session state early so page_config can use it
+if "active_mode" not in st.session_state:
+    st.session_state.active_mode = "Ask Knowledge Base"
 
 st.set_page_config(
-    page_title="Proof Lab AI",
+    page_title=f"Proof Lab AI — {st.session_state.active_mode}",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# ─────────────────────────────────────────────
+# Global CSS — all improvements bundled
+# ─────────────────────────────────────────────
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
 
+/* ── Design tokens ── */
 :root {
-    --bg-main: #0d0d0d;
-    --bg-card: #161616;
-    --bg-sidebar: #111111;
-    --accent: #c9a84c;
-    --accent-light: #e8c97a;
-    --accent-dim: rgba(201,168,76,0.12);
-    --text-primary: #f0ece4;
-    --text-secondary: #9e9a93;
-    --border: rgba(201,168,76,0.18);
-    --radius: 12px;
-    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --bg-main:     #0d0d0d;
+    --bg-card:     #161616;
+    --bg-sidebar:  #111111;
+    --accent:      #c9a84c;
+    --accent-light:#e8c97a;
+    --accent-dim:  rgba(201,168,76,0.12);
+    --text-primary:#f0ece4;
+    --text-muted:  #9e9a93;
+    --text-faint:  #555;
+    --border:      rgba(201,168,76,0.18);
+    --border-solid:#2a2a2a;
+    --radius:      12px;
+    --shadow:      0 4px 24px rgba(0,0,0,0.4);
 }
 
+/* ── Base ── */
 html, body, [data-testid="stAppViewContainer"] {
     background-color: var(--bg-main) !important;
     color: var(--text-primary) !important;
     font-family: 'Inter', sans-serif !important;
 }
 
+/* ── Sidebar ── */
 [data-testid="stSidebar"] {
     background-color: var(--bg-sidebar) !important;
     border-right: 1px solid var(--border) !important;
 }
 [data-testid="stSidebar"] * { color: var(--text-primary) !important; }
 
+/* ── Custom logo SVG ── */
+.pl-logo-svg {
+    width: 52px; height: 52px; flex-shrink: 0;
+    filter: drop-shadow(0 0 12px rgba(201,168,76,0.5));
+}
+
+/* ── Header ── */
 .proof-header {
     display: flex; align-items: center; gap: 16px;
     padding: 20px 0 8px 0;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 28px;
-}
-.proof-header .logo-circle {
-    width: 52px; height: 52px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), #7a5c10);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px; flex-shrink: 0;
-    box-shadow: 0 0 24px rgba(201,168,76,0.35);
+    margin-bottom: 0;
 }
 .proof-header h1 {
     font-family: 'Playfair Display', serif !important;
@@ -144,20 +164,74 @@ html, body, [data-testid="stAppViewContainer"] {
     letter-spacing: 0.5px;
 }
 .proof-header .tagline {
-    font-size: 0.72rem; color: var(--text-secondary);
+    font-size: 0.72rem; color: var(--text-muted);
     letter-spacing: 2px; text-transform: uppercase; margin-top: 3px;
 }
 
-.mode-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: var(--accent-dim);
+/* ── Mode hero banner ── */
+.mode-hero {
+    margin: 0 0 28px 0;
+    padding: 22px 28px;
+    border-radius: 0 0 var(--radius) var(--radius);
     border: 1px solid var(--border);
-    border-radius: 999px; padding: 6px 18px;
-    font-size: 0.82rem; font-weight: 600;
-    color: var(--accent-light); letter-spacing: 0.5px;
-    margin-bottom: 24px;
+    border-top: none;
+    display: flex; align-items: center; gap: 16px;
+    position: relative; overflow: hidden;
+}
+.mode-hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 60%);
+    pointer-events: none;
+}
+.mode-hero .hero-icon {
+    font-size: 2.4rem; flex-shrink: 0;
+    filter: drop-shadow(0 0 8px rgba(201,168,76,0.4));
+}
+.mode-hero .hero-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.35rem; font-weight: 700;
+    color: var(--accent); margin: 0;
+}
+.mode-hero .hero-desc {
+    font-size: 0.8rem; color: var(--text-muted);
+    margin-top: 3px; line-height: 1.5;
+}
+.mode-hero .hero-bg-text {
+    position: absolute; right: 24px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 5rem; opacity: 0.04;
+    font-family: 'Playfair Display', serif;
+    font-weight: 700; color: var(--accent);
+    pointer-events: none; user-select: none;
+    white-space: nowrap;
 }
 
+/* ── Sidebar nav buttons ── */
+.nav-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 8px;
+    cursor: pointer; margin-bottom: 4px;
+    font-size: 0.85rem; font-weight: 500;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    text-decoration: none;
+}
+.nav-btn:hover {
+    background: var(--accent-dim);
+    color: var(--accent-light);
+    border-color: var(--border);
+}
+.nav-btn.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-color: var(--border);
+    font-weight: 600;
+}
+.nav-btn .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
+
+/* ── Cards ── */
 .pl-card {
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 22px;
@@ -169,6 +243,59 @@ html, body, [data-testid="stAppViewContainer"] {
     color: var(--accent); margin-bottom: 14px;
 }
 
+/* ── Metric cards ── */
+.metric-row { display: flex; gap: 12px; margin-bottom: 20px; }
+.metric-card {
+    flex: 1; background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px;
+    box-shadow: var(--shadow);
+}
+.metric-card .metric-value {
+    font-size: 1.8rem; font-weight: 700;
+    color: var(--accent); line-height: 1;
+}
+.metric-card .metric-label {
+    font-size: 0.65rem; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-top: 5px;
+}
+.metric-card .metric-delta {
+    font-size: 0.72rem; color: #5cb85c;
+    margin-top: 3px;
+}
+
+/* ── Section divider ── */
+.pl-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 28px 0 20px 0;
+}
+.pl-divider::before, .pl-divider::after {
+    content: ''; flex: 1;
+    height: 1px; background: var(--border);
+}
+.pl-divider span {
+    font-size: 0.62rem; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 2px;
+    white-space: nowrap;
+}
+
+/* ── Empty state ── */
+.empty-state {
+    background: var(--bg-card);
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 52px 40px;
+    text-align: center;
+}
+.empty-state .empty-icon { font-size: 2.8rem; margin-bottom: 14px; }
+.empty-state .empty-title {
+    font-size: 1rem; color: var(--text-muted);
+    font-weight: 500; margin-bottom: 6px;
+}
+.empty-state .empty-sub { font-size: 0.78rem; color: var(--text-faint); }
+
+/* ── Inputs ── */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea {
     background-color: #1c1c1c !important;
@@ -184,7 +311,12 @@ html, body, [data-testid="stAppViewContainer"] {
     box-shadow: 0 0 0 2px rgba(201,168,76,0.15) !important;
     outline: none !important;
 }
+.input-hint {
+    font-size: 0.68rem; color: var(--text-faint);
+    text-align: right; margin-top: -10px; margin-bottom: 8px;
+}
 
+/* ── Selectbox ── */
 .stSelectbox > div > div {
     background-color: #1c1c1c !important;
     border: 1px solid var(--border) !important;
@@ -192,6 +324,7 @@ html, body, [data-testid="stAppViewContainer"] {
     color: var(--text-primary) !important;
 }
 
+/* ── Buttons ── */
 .stButton > button {
     background: linear-gradient(135deg, var(--accent), #8b6914) !important;
     color: #0d0d0d !important; font-weight: 700 !important;
@@ -206,7 +339,6 @@ html, body, [data-testid="stAppViewContainer"] {
     transform: translateY(-1px) !important;
     box-shadow: 0 5px 22px rgba(201,168,76,0.38) !important;
 }
-
 .stDownloadButton > button {
     background: transparent !important; color: var(--accent) !important;
     border: 1px solid var(--border) !important; border-radius: 8px !important;
@@ -215,7 +347,6 @@ html, body, [data-testid="stAppViewContainer"] {
 .stDownloadButton > button:hover {
     background: var(--accent-dim) !important; border-color: var(--accent) !important;
 }
-
 [data-testid="stFormSubmitButton"] > button {
     background: linear-gradient(135deg, var(--accent), #8b6914) !important;
     color: #0d0d0d !important; font-weight: 700 !important;
@@ -224,6 +355,7 @@ html, body, [data-testid="stAppViewContainer"] {
     font-size: 0.92rem !important;
 }
 
+/* ── Chat ── */
 [data-testid="stChatMessage"] {
     background: var(--bg-card) !important;
     border: 1px solid var(--border) !important;
@@ -237,11 +369,12 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 [data-testid="stChatInput"] textarea { color: var(--text-primary) !important; }
 
+/* ── Expanders ── */
 .streamlit-expanderHeader {
     background: #1a1a1a !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
-    color: var(--text-secondary) !important;
+    color: var(--text-muted) !important;
     font-size: 0.82rem !important;
 }
 .streamlit-expanderContent {
@@ -250,12 +383,34 @@ html, body, [data-testid="stAppViewContainer"] {
     border-top: none !important;
 }
 
+/* ── DataFrames — dark override ── */
 [data-testid="stDataFrame"] {
     border: 1px solid var(--border) !important;
     border-radius: var(--radius) !important;
     overflow: hidden !important;
 }
+[data-testid="stDataFrame"] table {
+    background-color: var(--bg-card) !important;
+}
+[data-testid="stDataFrame"] thead tr th {
+    background-color: #1e1e1e !important;
+    color: var(--accent) !important;
+    font-size: 0.72rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+[data-testid="stDataFrame"] tbody tr td {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    font-size: 0.82rem !important;
+    border-bottom: 1px solid #1e1e1e !important;
+}
+[data-testid="stDataFrame"] tbody tr:hover td {
+    background-color: #1e1e1e !important;
+}
 
+/* ── File uploader ── */
 [data-testid="stFileUploader"] {
     background: #1a1a1a !important;
     border: 1.5px dashed var(--border) !important;
@@ -263,21 +418,34 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 [data-testid="stFileUploader"]:hover { border-color: var(--accent) !important; }
 
-hr { border-color: var(--border) !important; margin: 22px 0 !important; }
+/* ── Alerts — styled ── */
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+    border-left: 3px solid var(--accent) !important;
+    background: #1a1a1a !important;
+}
 
+/* ── Labels ── */
 label, .stTextInput label, .stTextArea label,
 .stSelectbox label, .stDateInput label, .stCheckbox label {
-    color: var(--text-secondary) !important;
+    color: var(--text-muted) !important;
     font-size: 0.8rem !important; font-weight: 500 !important;
     letter-spacing: 0.3px !important;
 }
 
+/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-main); }
 ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
+/* ── Headings ── */
 h2, h3 { font-family: 'Playfair Display', serif !important; color: var(--text-primary) !important; }
+
+/* ── Spinner override ── */
+[data-testid="stSpinner"] > div {
+    border-top-color: var(--accent) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -298,28 +466,52 @@ def load_csv(file_path, columns):
         return pd.read_csv(file_path)
     return pd.DataFrame(columns=columns)
 
-
 def append_csv(file_path, row, columns):
     df = load_csv(file_path, columns)
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
     df.to_csv(file_path, index=False)
 
+def pl_divider(label=""):
+    st.markdown(f"<div class='pl-divider'><span>{label}</span></div>", unsafe_allow_html=True)
 
 def show_history(title, file_path, columns, download_name):
-    st.divider()
-    st.markdown(f"<div class='pl-card-title'>{title}</div>", unsafe_allow_html=True)
+    pl_divider(title)
     df = load_csv(file_path, columns)
     if df.empty:
-        st.info("No history saved yet.")
+        st.markdown(f"""
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div class="empty-title">No {title.lower()} yet</div>
+            <div class="empty-sub">Records will appear here after your first submission.</div>
+        </div>""", unsafe_allow_html=True)
     else:
-        st.dataframe(df, use_container_width=True)
+        # Pagination
+        page_size = 10
+        total = len(df)
+        page_key = f"page_{download_name}"
+        if page_key not in st.session_state:
+            st.session_state[page_key] = 0
+        max_page = max(0, (total - 1) // page_size)
+        start = st.session_state[page_key] * page_size
+        end = min(start + page_size, total)
+        st.dataframe(df.iloc[start:end], use_container_width=True)
+        col_a, col_b, col_c = st.columns([1, 2, 1])
+        with col_a:
+            if st.button("← Prev", key=f"prev_{download_name}", disabled=st.session_state[page_key] == 0):
+                st.session_state[page_key] -= 1
+                st.rerun()
+        with col_b:
+            st.markdown(f"<div style='text-align:center;font-size:0.75rem;color:var(--text-faint);padding-top:8px;'>Page {st.session_state[page_key]+1} of {max_page+1} · {total} records</div>", unsafe_allow_html=True)
+        with col_c:
+            if st.button("Next →", key=f"next_{download_name}", disabled=st.session_state[page_key] >= max_page):
+                st.session_state[page_key] += 1
+                st.rerun()
         st.download_button(
-            label=f"⬇ Download {title}",
+            label=f"⬇ Download {title} CSV",
             data=df.to_csv(index=False),
             file_name=download_name,
             mime="text/csv"
         )
-
 
 def get_document_library():
     store = st.session_state.vector_store
@@ -335,12 +527,9 @@ def get_document_library():
             docs[doc]["pages"].add(str(page))
     return [{"Document": info["document"], "Pages": len(info["pages"]), "Chunks": info["chunks"], "Uploaded": info["uploaded_at"]} for info in docs.values()]
 
-
 def delete_document(document_title):
     store = st.session_state.vector_store
-    deleted = vector_store_delete(store, document_title)
-    return deleted
-
+    return vector_store_delete(store, document_title)
 
 def extract_text_with_pypdf(uploaded_file):
     pdf = PdfReader(uploaded_file)
@@ -351,13 +540,11 @@ def extract_text_with_pypdf(uploaded_file):
             pages.append({"page": page_index, "text": text})
     return pages, len(pdf.pages)
 
-
 def extract_text_with_llamaparse(file_path):
     parser = LlamaParse(api_key=llama_api_key, result_type="markdown")
     documents = parser.load_data(file_path)
     combined_text = "\n\n".join(doc.text for doc in documents if doc.text)
     return [{"page": "OCR", "text": combined_text}]
-
 
 def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extraction_method):
     store = st.session_state.vector_store
@@ -392,7 +579,6 @@ def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extract
                 skipped_chunks += 1
     return added_chunks, skipped_chunks
 
-
 def retrieve_context(question, n_results=5):
     store = st.session_state.vector_store
     if not store["embeddings"]:
@@ -407,7 +593,6 @@ def retrieve_context(question, n_results=5):
         context_blocks.append(source_label + "\n" + doc)
     return "\n\n".join(context_blocks), metadatas
 
-
 def format_sources(metadatas):
     return "\n".join(
         f"Source {i}: {meta.get('document_title', 'Unknown')} | Page {meta.get('page', 'N/A')} | "
@@ -415,105 +600,152 @@ def format_sources(metadatas):
         for i, meta in enumerate(metadatas, start=1)
     )
 
-
 def encode_image(uploaded_image):
     return base64.b64encode(uploaded_image.getvalue()).decode("utf-8")
 
+def mode_hero(icon, title, description, bg_text=""):
+    st.markdown(f"""
+    <div class="mode-hero">
+        <div class="hero-icon">{icon}</div>
+        <div>
+            <div class="hero-title">{title}</div>
+            <div class="hero-desc">{description}</div>
+        </div>
+        <div class="hero-bg-text">{bg_text or title}</div>
+    </div>""", unsafe_allow_html=True)
 
-BATCH_COLUMNS = ["timestamp", "batch_name", "product", "batch_date", "formula_notes", "process_notes",
-                 "dough_temp", "butter_temp", "room_temp", "proof_temp", "proof_time", "bake_temp", "bake_time",
-                 "result", "issues", "next_adjustment"]
-ASK_COLUMNS = ["timestamp", "question", "answer", "sources"]
-SOP_COLUMNS = ["timestamp", "product_name", "user_notes", "generated_sop", "sources"]
-VISION_COLUMNS = ["timestamp", "image_name", "product_type", "batch_notes", "diagnosis", "sources"]
-RD_COLUMNS = ["timestamp", "product_type", "flavor_direction", "texture_goal", "constraints", "brand_mood", "batch_size", "generated_concept", "sources"]
+def empty_state(icon, title, subtitle):
+    st.markdown(f"""
+    <div class="empty-state">
+        <div class="empty-icon">{icon}</div>
+        <div class="empty-title">{title}</div>
+        <div class="empty-sub">{subtitle}</div>
+    </div>""", unsafe_allow_html=True)
+
+BATCH_COLUMNS   = ["timestamp","batch_name","product","batch_date","formula_notes","process_notes",
+                   "dough_temp","butter_temp","room_temp","proof_temp","proof_time","bake_temp","bake_time",
+                   "result","issues","next_adjustment"]
+ASK_COLUMNS     = ["timestamp","question","answer","sources"]
+SOP_COLUMNS     = ["timestamp","product_name","user_notes","generated_sop","sources"]
+VISION_COLUMNS  = ["timestamp","image_name","product_type","batch_notes","diagnosis","sources"]
+RD_COLUMNS      = ["timestamp","product_type","flavor_direction","texture_goal","constraints","brand_mood","batch_size","generated_concept","sources"]
 
 def load_batches(): return load_csv(BATCH_FILE, BATCH_COLUMNS)
 def save_batch(row): append_csv(BATCH_FILE, row, BATCH_COLUMNS)
 
 
 # ─────────────────────────────────────────────
-# Sidebar
+# Sidebar — vertical nav menu
 # ─────────────────────────────────────────────
 
-MODE_ICONS = {
-    "Ask Knowledge Base": "💬",
-    "SOP Creator": "📋",
-    "Batch Tracker": "📊",
-    "Vision Analyzer": "🔬",
-    "Recipe R&D Generator": "⚗️",
-    "Recipe Evaluator": "✅"
-}
+PROOF_LAB_LOGO_SVG = """
+<svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="26" cy="26" r="26" fill="url(#grad)"/>
+  <defs>
+    <radialGradient id="grad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#e8c97a"/>
+      <stop offset="100%" stop-color="#7a5c10"/>
+    </radialGradient>
+  </defs>
+  <!-- Flask body -->
+  <path d="M20 14 L20 26 L14 38 Q13 40 15 41 L37 41 Q39 40 38 38 L32 26 L32 14 Z"
+        fill="none" stroke="#0d0d0d" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Flask neck top -->
+  <rect x="19" y="12" width="14" height="3" rx="1.5" fill="#0d0d0d"/>
+  <!-- Liquid inside -->
+  <path d="M16.5 35 Q18 30 26 30 Q34 30 35.5 35 L37 41 Q39 40 38 38 L32 26 L32 14 L20 14 L20 26 L14 38 Q13 40 15 41 Z"
+        fill="rgba(0,0,0,0.35)"/>
+  <!-- Bubbles -->
+  <circle cx="22" cy="36" r="1.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="28" cy="33" r="1" fill="rgba(255,255,255,0.4)"/>
+  <circle cx="25" cy="38" r="1" fill="rgba(255,255,255,0.3)"/>
+</svg>
+"""
 
 with st.sidebar:
-    st.markdown("""
-    <div style="padding:20px 0 16px 0;border-bottom:1px solid rgba(201,168,76,0.18);margin-bottom:20px;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.25rem;font-weight:700;color:#c9a84c;">🧪 Proof Lab AI</div>
-        <div style="font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:2px;margin-top:4px;">Bakery Intelligence Platform</div>
+    # Logo + brand
+    st.markdown(f"""
+    <div style="padding:20px 0 16px 0;border-bottom:1px solid rgba(201,168,76,0.18);margin-bottom:20px;
+                display:flex;align-items:center;gap:12px;">
+        <div class="pl-logo-svg">{PROOF_LAB_LOGO_SVG}</div>
+        <div>
+            <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#c9a84c;line-height:1.2;">Proof Lab AI</div>
+            <div style="font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:2px;margin-top:3px;">Bakery Intelligence</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;'>Navigation</div>", unsafe_allow_html=True)
-    mode = st.selectbox("Mode", list(MODE_ICONS.keys()), label_visibility="collapsed")
+    st.markdown("<div style='font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;padding-left:4px;'>Navigation</div>", unsafe_allow_html=True)
+
+    # Vertical nav buttons
+    for m, icon in MODE_ICONS.items():
+        is_active = st.session_state.active_mode == m
+        active_class = "active" if is_active else ""
+        if st.button(f"{icon}  {m}", key=f"nav_{m}", use_container_width=True):
+            st.session_state.active_mode = m
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🗑 Clear Chat", use_container_width=True):
+    if st.button("🗑  Clear Chat History", use_container_width=True):
         st.session_state.messages = []
+        st.toast("Chat history cleared.", icon="🗑")
         st.rerun()
 
-    st.divider()
-    st.markdown("<div style='font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;'>Knowledge Base</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1px;background:rgba(201,168,76,0.12);margin:12px 0 16px 0;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;padding-left:4px;'>Knowledge Base</div>", unsafe_allow_html=True)
 
     library_rows = get_document_library()
 
     if library_rows:
         total_chunks = sum(r["Chunks"] for r in library_rows)
-        total_docs = len(library_rows)
+        total_docs   = len(library_rows)
         st.markdown(f"""
         <div style="display:flex;gap:8px;margin-bottom:12px;">
             <div style="flex:1;background:#1a1a1a;border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:10px;text-align:center;">
                 <div style="font-size:1.3rem;font-weight:700;color:#c9a84c;">{total_docs}</div>
-                <div style="font-size:0.62rem;color:#555;text-transform:uppercase;letter-spacing:1px;">Docs</div>
+                <div style="font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1px;">Docs</div>
             </div>
             <div style="flex:1;background:#1a1a1a;border:1px solid rgba(201,168,76,0.18);border-radius:8px;padding:10px;text-align:center;">
                 <div style="font-size:1.3rem;font-weight:700;color:#c9a84c;">{total_chunks}</div>
-                <div style="font-size:0.62rem;color:#555;text-transform:uppercase;letter-spacing:1px;">Chunks</div>
+                <div style="font-size:0.6rem;color:#444;text-transform:uppercase;letter-spacing:1px;">Chunks</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         library_df = pd.DataFrame(library_rows)
         st.dataframe(library_df, use_container_width=True, height=150)
-        doc_names = [row["Document"] for row in library_rows]
+        doc_names    = [row["Document"] for row in library_rows]
         selected_doc = st.selectbox("Select document to delete", doc_names, label_visibility="collapsed")
-        if st.button("🗑 Delete Document", use_container_width=True):
+        if st.button("🗑  Delete Document", use_container_width=True):
             deleted_count = delete_document(selected_doc)
-            st.success(f"Deleted {deleted_count} chunks from '{selected_doc}'")
+            st.toast(f"Deleted {deleted_count} chunks from '{selected_doc}'", icon="🗑")
             st.rerun()
     else:
         st.markdown("""
-        <div style="background:#1a1a1a;border:1px dashed rgba(201,168,76,0.18);border-radius:8px;padding:18px;text-align:center;">
+        <div style="background:#1a1a1a;border:1px dashed rgba(201,168,76,0.18);border-radius:8px;
+                    padding:18px;text-align:center;">
             <div style="font-size:1.4rem;margin-bottom:6px;">📂</div>
             <div style="font-size:0.75rem;color:#555;">No documents yet.<br>Upload a PDF to get started.</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:0.6rem;color:#333;text-align:center;'>Proof Lab AI · v2.1</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.58rem;color:#2a2a2a;text-align:center;'>Proof Lab AI · v3.0</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# Main header
+# Main header with custom SVG logo
 # ─────────────────────────────────────────────
+
+mode = st.session_state.active_mode
 
 st.markdown(f"""
 <div class="proof-header">
-    <div class="logo-circle">🧪</div>
+    <div class="pl-logo-svg">{PROOF_LAB_LOGO_SVG}</div>
     <div>
         <h1>Proof Lab AI</h1>
         <div class="tagline">Bakery Intelligence Platform</div>
     </div>
 </div>
-<div class="mode-badge">{MODE_ICONS[mode]} &nbsp; {mode}</div>
 """, unsafe_allow_html=True)
 
 
@@ -522,13 +754,14 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 
 with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
-    force_ocr = st.checkbox("Force OCR with LlamaParse (for scanned PDFs)")
+    force_ocr   = st.checkbox("Force OCR with LlamaParse (for scanned PDFs)")
+    st.markdown("<div class='input-hint'>⌘ Drag & drop or click to browse</div>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload a PDF", type="pdf", label_visibility="collapsed")
 
     if uploaded_file:
-        with st.spinner("Processing PDF..."):
-            extracted_pages = []
-            page_count = 0
+        with st.spinner("Processing PDF — extracting and embedding chunks..."):
+            extracted_pages  = []
+            page_count       = 0
             extraction_method = "pypdf"
 
             if not force_ocr:
@@ -543,18 +776,19 @@ with st.expander("📄 Upload PDF to Knowledge Base", expanded=False):
                 if not llama_api_key:
                     st.error("Missing LLAMA_CLOUD_API_KEY in your secrets.")
                     st.stop()
-                st.warning("Using LlamaParse OCR...")
+                st.warning("Switching to LlamaParse OCR for scanned content...")
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
                     temp_file.write(uploaded_file.getbuffer())
                     temp_path = temp_file.name
-                extracted_pages = extract_text_with_llamaparse(temp_path)
-                page_count = "OCR"
+                extracted_pages   = extract_text_with_llamaparse(temp_path)
+                page_count        = "OCR"
                 extraction_method = "llamaparse_ocr"
 
             added_chunks, skipped_chunks = add_chunks_to_store(
                 uploaded_file.name, extracted_pages, page_count, extraction_method
             )
-        st.success(f"✅ Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
+        st.toast(f"✅ Added {added_chunks} chunks from '{uploaded_file.name}'", icon="📄")
+        st.success(f"Processed with **{extraction_method}** — Added **{added_chunks}** chunks, skipped **{skipped_chunks}** duplicates.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -564,31 +798,43 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────
 
 if mode == "Ask Knowledge Base":
+    mode_hero("💬", "Ask Knowledge Base",
+              "Query your uploaded documents using AI-powered semantic search and retrieval.",
+              "Ask")
+
     chat_col, info_col = st.columns([3, 1])
 
     with info_col:
         st.markdown("""
         <div class="pl-card">
-            <div class="pl-card-title">About this mode</div>
-            <div style="font-size:0.82rem;color:#9e9a93;line-height:1.7;">
-                Ask questions about baking science, fermentation, pastry techniques, and more — powered by your uploaded knowledge base.
+            <div class="pl-card-title">How it works</div>
+            <div style="font-size:0.82rem;color:#9e9a93;line-height:1.8;">
+                Your question is embedded and matched against uploaded documents using cosine similarity.
+                The top chunks are sent to GPT-4.1 as context.
             </div>
-            <div style="margin-top:16px;font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:1px;">Tips</div>
-            <div style="font-size:0.78rem;color:#9e9a93;margin-top:6px;line-height:1.8;">
+            <div style="margin-top:16px;" class="pl-card-title">Tips</div>
+            <div style="font-size:0.78rem;color:#9e9a93;margin-top:6px;line-height:1.9;">
                 • Be specific in your questions<br>
                 • Reference product types<br>
                 • Ask follow-up questions<br>
                 • Check sources for citations
             </div>
+            <div style="margin-top:16px;font-size:0.68rem;color:#444;border-top:1px solid rgba(201,168,76,0.1);padding-top:12px;">
+                ⌘ Enter &nbsp;·&nbsp; Submit message
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     with chat_col:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
+        if not st.session_state.messages:
+            empty_state("💬", "No conversation yet",
+                        "Ask a question about baking science, fermentation, or pastry techniques.")
+        else:
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.write(message["content"])
 
-        question = st.chat_input("Ask about baking, fermentation, pastry science...")
+        question = st.chat_input("Ask about baking, fermentation, pastry science…  (⌘ Enter to send)")
 
         if question:
             st.session_state.messages.append({"role": "user", "content": question})
@@ -610,19 +856,22 @@ List the source number, document title, page number, chunk number, and extractio
                 messages_payload.append(msg)
             messages_payload.append({"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{question}"})
 
-            with st.spinner("Thinking..."):
+            with st.spinner("Retrieving context and generating answer..."):
                 response = client.chat.completions.create(model="gpt-4.1-mini", messages=messages_payload)
 
             answer = response.choices[0].message.content
             st.session_state.messages.append({"role": "assistant", "content": answer})
             sources_text = format_sources(metadatas)
 
-            append_csv(ASK_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"), "question": question, "answer": answer, "sources": sources_text}, ASK_COLUMNS)
+            append_csv(ASK_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                       "question": question, "answer": answer, "sources": sources_text}, ASK_COLUMNS)
 
             with st.chat_message("assistant"):
                 st.write(answer)
                 with st.expander("📎 Retrieved sources"):
                     st.text(sources_text)
+
+            st.toast("Answer generated.", icon="💬")
 
     show_history("Ask History", ASK_HISTORY_FILE, ASK_COLUMNS, "ask_history.csv")
 
@@ -632,13 +881,17 @@ List the source number, document title, page number, chunk number, and extractio
 # ─────────────────────────────────────────────
 
 if mode == "SOP Creator":
+    mode_hero("📋", "SOP Creator",
+              "Generate professional, staff-ready Standard Operating Procedures from rough notes.",
+              "SOP")
+
     left, right = st.columns([2, 1])
 
     with right:
         st.markdown("""
         <div class="pl-card">
             <div class="pl-card-title">SOP Structure</div>
-            <div style="font-size:0.78rem;color:#9e9a93;line-height:2.0;">
+            <div style="font-size:0.78rem;color:#9e9a93;line-height:2.1;">
                 1. SOP Title<br>2. Purpose<br>3. Product Overview<br>
                 4. Required Equipment<br>5. Ingredients / Components<br>
                 6. Mise en Place<br>7. Production Procedure<br>
@@ -652,20 +905,22 @@ if mode == "SOP Creator":
 
     with left:
         product_name = st.text_input("Product / SOP Name", placeholder="Example: The BUN — Cardamom")
-        sop_notes = st.text_area("Paste rough notes, recipe, process, or staff instructions", height=220,
-                                  placeholder="Example: Mix dough 8 min, bulk 45 min, shape, proof until puffy, bake at 180°C...")
+        sop_notes    = st.text_area("Paste rough notes, recipe, process, or staff instructions", height=220,
+                                    placeholder="Example: Mix dough 8 min, bulk 45 min, shape, proof until puffy, bake at 180°C…")
+        st.markdown("<div class='input-hint'>⌘ Enter &nbsp;·&nbsp; New line &nbsp;·&nbsp; Shift+Enter for paragraph break</div>", unsafe_allow_html=True)
         use_knowledge_base = st.checkbox("Use knowledge base for technical support", value=True)
 
         if st.button("📋 Generate SOP", use_container_width=True):
             if not sop_notes.strip():
-                st.warning("Please enter rough notes first.")
+                st.toast("Please enter rough notes first.", icon="⚠️")
             else:
-                context = ""
+                context  = ""
                 metadatas = []
                 if use_knowledge_base:
-                    context, metadatas = retrieve_context(f"Technical support for SOP: {product_name}. {sop_notes}", n_results=5)
+                    context, metadatas = retrieve_context(
+                        f"Technical support for SOP: {product_name}. {sop_notes}", n_results=5)
 
-                with st.spinner("Generating SOP..."):
+                with st.spinner("Generating professional SOP…"):
                     response = client.chat.completions.create(
                         model="gpt-4.1-mini",
                         messages=[
@@ -682,17 +937,22 @@ If information is missing, add reasonable placeholders marked as [TO CONFIRM].
                         ]
                     )
 
-                sop_output = response.choices[0].message.content
+                sop_output   = response.choices[0].message.content
                 sources_text = format_sources(metadatas)
-                append_csv(SOP_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"), "product_name": product_name, "user_notes": sop_notes, "generated_sop": sop_output, "sources": sources_text}, SOP_COLUMNS)
+                append_csv(SOP_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                           "product_name": product_name, "user_notes": sop_notes,
+                           "generated_sop": sop_output, "sources": sources_text}, SOP_COLUMNS)
 
-                st.divider()
-                st.markdown("<div class='pl-card-title'>Generated SOP</div>", unsafe_allow_html=True)
+                pl_divider("Generated SOP")
                 st.markdown(sop_output)
-                st.download_button(label="⬇ Download SOP as Markdown", data=sop_output, file_name=f"{product_name or 'proof_lab_sop'}.md", mime="text/markdown")
+                st.download_button(label="⬇ Download SOP as Markdown",
+                                   data=sop_output,
+                                   file_name=f"{product_name or 'proof_lab_sop'}.md",
+                                   mime="text/markdown")
                 if use_knowledge_base and metadatas:
                     with st.expander("📎 Knowledge sources used"):
                         st.text(sources_text)
+                st.toast("SOP generated successfully.", icon="📋")
 
     show_history("SOP History", SOP_HISTORY_FILE, SOP_COLUMNS, "sop_history.csv")
 
@@ -702,7 +962,34 @@ If information is missing, add reasonable placeholders marked as [TO CONFIRM].
 # ─────────────────────────────────────────────
 
 if mode == "Batch Tracker":
-    st.markdown("<div class='pl-card-title'>Log a New Batch</div>", unsafe_allow_html=True)
+    mode_hero("📊", "Batch Tracker",
+              "Log every production batch with full process parameters and AI-powered analysis.",
+              "Batch")
+
+    # Metric cards at top
+    batch_df_all = load_batches()
+    total_batches   = len(batch_df_all)
+    last_product    = batch_df_all["product"].iloc[-1] if total_batches > 0 else "—"
+    last_bake_temp  = batch_df_all["bake_temp"].iloc[-1] if total_batches > 0 else "—"
+
+    st.markdown(f"""
+    <div class="metric-row">
+        <div class="metric-card">
+            <div class="metric-value">{total_batches}</div>
+            <div class="metric-label">Total Batches</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{last_product}</div>
+            <div class="metric-label">Last Product</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{last_bake_temp}</div>
+            <div class="metric-label">Last Bake Temp</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    pl_divider("Log a New Batch")
 
     with st.form("batch_form"):
         col1, col2, col3 = st.columns(3)
@@ -710,29 +997,29 @@ if mode == "Batch Tracker":
         with col1:
             st.markdown("<div style='font-size:0.68rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;'>Batch Info</div>", unsafe_allow_html=True)
             batch_name = st.text_input("Batch Name", placeholder="Croissant Batch 6")
-            product = st.text_input("Product", placeholder="Croissant / Bun / Brownie")
+            product    = st.text_input("Product", placeholder="Croissant / Bun / Brownie")
             batch_date = st.date_input("Batch Date")
 
         with col2:
             st.markdown("<div style='font-size:0.68rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;'>Temperature Log</div>", unsafe_allow_html=True)
-            dough_temp = st.text_input("Dough Temp", placeholder="8°C")
+            dough_temp  = st.text_input("Dough Temp",  placeholder="8°C")
             butter_temp = st.text_input("Butter Temp", placeholder="13°C")
-            room_temp = st.text_input("Room Temp", placeholder="21°C")
+            room_temp   = st.text_input("Room Temp",   placeholder="21°C")
 
         with col3:
             st.markdown("<div style='font-size:0.68rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;'>Process Parameters</div>", unsafe_allow_html=True)
             proof_temp = st.text_input("Proof Temp", placeholder="26°C")
             proof_time = st.text_input("Proof Time", placeholder="2.5 hr")
-            bake_temp = st.text_input("Bake Temp", placeholder="180°C")
-            bake_time = st.text_input("Bake Time", placeholder="18 min")
+            bake_temp  = st.text_input("Bake Temp",  placeholder="180°C")
+            bake_time  = st.text_input("Bake Time",  placeholder="18 min")
 
-        st.divider()
+        st.markdown("<div style='height:1px;background:rgba(201,168,76,0.1);margin:12px 0;'></div>", unsafe_allow_html=True)
         note_col1, note_col2 = st.columns(2)
         with note_col1:
-            formula_notes = st.text_area("Formula Notes", height=100)
-            process_notes = st.text_area("Process Notes", height=100)
+            formula_notes = st.text_area("Formula Notes",  height=100)
+            process_notes = st.text_area("Process Notes",  height=100)
         with note_col2:
-            result = st.text_area("Result", height=100)
+            result = st.text_area("Result",           height=100)
             issues = st.text_area("Issues / Defects", height=100)
 
         next_adjustment = st.text_area("Next Adjustment", height=80)
@@ -740,36 +1027,41 @@ if mode == "Batch Tracker":
 
         if submitted:
             save_batch({
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"), "batch_name": batch_name,
-                "product": product, "batch_date": str(batch_date), "formula_notes": formula_notes,
-                "process_notes": process_notes, "dough_temp": dough_temp, "butter_temp": butter_temp,
-                "room_temp": room_temp, "proof_temp": proof_temp, "proof_time": proof_time,
-                "bake_temp": bake_temp, "bake_time": bake_time, "result": result,
-                "issues": issues, "next_adjustment": next_adjustment
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "batch_name": batch_name, "product": product, "batch_date": str(batch_date),
+                "formula_notes": formula_notes, "process_notes": process_notes,
+                "dough_temp": dough_temp, "butter_temp": butter_temp, "room_temp": room_temp,
+                "proof_temp": proof_temp, "proof_time": proof_time,
+                "bake_temp": bake_temp, "bake_time": bake_time,
+                "result": result, "issues": issues, "next_adjustment": next_adjustment
             })
-            st.success("✅ Batch saved successfully.")
+            st.toast(f"Batch '{batch_name}' saved successfully.", icon="💾")
+            st.rerun()
 
-    st.divider()
-    st.markdown("<div class='pl-card-title'>Saved Batches</div>", unsafe_allow_html=True)
+    pl_divider("Saved Batches")
     batch_df = load_batches()
 
     if batch_df.empty:
-        st.info("No batches saved yet.")
+        empty_state("📊", "No batches logged yet", "Fill in the form above to log your first production batch.")
     else:
         st.dataframe(batch_df, use_container_width=True)
-        st.download_button(label="⬇ Download Batch Tracker CSV", data=batch_df.to_csv(index=False), file_name="batch_tracker.csv", mime="text/csv")
+        st.download_button(label="⬇ Download Batch Tracker CSV",
+                           data=batch_df.to_csv(index=False),
+                           file_name="batch_tracker.csv", mime="text/csv")
 
-        st.divider()
-        st.markdown("<div class='pl-card-title'>AI Batch Analysis</div>", unsafe_allow_html=True)
-        analysis_question = st.text_input("Ask about your saved batches", placeholder="Example: Why did butter leak in Batch 6?")
+        pl_divider("AI Batch Analysis")
+        analysis_question = st.text_input("Ask about your saved batches",
+                                          placeholder="Example: Why did butter leak in Batch 6?")
+        st.markdown("<div class='input-hint'>Ask any process or quality question about your logged batches</div>", unsafe_allow_html=True)
 
-        if st.button("Analyze Batch Data"):
+        if st.button("🔍 Analyze Batch Data"):
             if not analysis_question.strip():
-                st.warning("Please enter a batch analysis question.")
+                st.toast("Please enter a batch analysis question.", icon="⚠️")
             else:
-                with st.spinner("Analyzing batches..."):
-                    batch_context = batch_df.to_string(index=False)
-                    kb_context, metadatas = retrieve_context(f"Technical baking support for: {analysis_question}", n_results=5)
+                with st.spinner("Analyzing batch data with knowledge base support…"):
+                    batch_context  = batch_df.to_string(index=False)
+                    kb_context, metadatas = retrieve_context(
+                        f"Technical baking support for: {analysis_question}", n_results=5)
                     response = client.chat.completions.create(
                         model="gpt-4.1-mini",
                         messages=[
@@ -783,8 +1075,9 @@ Be practical and specific. If the data is insufficient, say what is missing.
                             {"role": "user", "content": f"Batch Tracker Data:\n{batch_context}\n\nKnowledge Base Context:\n{kb_context}\n\nQuestion:\n{analysis_question}"}
                         ]
                     )
-                st.markdown("<div class='pl-card-title'>Batch Analysis</div>", unsafe_allow_html=True)
+                pl_divider("Batch Analysis")
                 st.markdown(response.choices[0].message.content)
+                st.toast("Batch analysis complete.", icon="📊")
 
 
 # ─────────────────────────────────────────────
@@ -792,42 +1085,49 @@ Be practical and specific. If the data is insufficient, say what is missing.
 # ─────────────────────────────────────────────
 
 if mode == "Vision Analyzer":
+    mode_hero("🔬", "Vision Analyzer",
+              "Upload a photo of your baked product for AI-powered visual diagnosis and corrective guidance.",
+              "Vision")
+
     left_col, right_col = st.columns([1, 2])
 
     with left_col:
-        uploaded_image = st.file_uploader("Upload image", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+        st.markdown("<div class='input-hint'>Supports PNG, JPG, JPEG</div>", unsafe_allow_html=True)
+        uploaded_image = st.file_uploader("Upload image", type=["png","jpg","jpeg"], label_visibility="collapsed")
         if uploaded_image:
             st.image(uploaded_image, caption="Uploaded image", use_container_width=True)
 
-        product_type = st.selectbox("Product type", ["Croissant", "Laminated dough", "Bread crumb", "Bun", "Brownie", "Cookie", "Other pastry"])
-        notes = st.text_area("Optional batch notes", height=120, placeholder="Example: Hydration 48%, butter temp 13°C, proofed at 26°C for 2.5 hours...")
+        product_type = st.selectbox("Product type",
+            ["Croissant","Laminated dough","Bread crumb","Bun","Brownie","Cookie","Other pastry"])
+        notes = st.text_area("Optional batch notes", height=120,
+                             placeholder="Example: Hydration 48%, butter temp 13°C, proofed at 26°C for 2.5 hours…")
         use_knowledge_base_for_vision = st.checkbox("Use knowledge base for technical support", value=True)
         analyze_btn = st.button("🔬 Analyze Image", use_container_width=True, disabled=not uploaded_image)
 
     with right_col:
         if not uploaded_image:
             st.markdown("""
-            <div style="background:#161616;border:1.5px dashed rgba(201,168,76,0.18);border-radius:12px;
-                        padding:60px 40px;text-align:center;min-height:380px;
-                        display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                <div style="font-size:3rem;margin-bottom:16px;">🔬</div>
-                <div style="font-size:1rem;color:#9e9a93;font-weight:500;">Upload an image to analyze</div>
-                <div style="font-size:0.78rem;color:#444;margin-top:8px;">Supports PNG, JPG, JPEG</div>
+            <div class="empty-state" style="min-height:380px;display:flex;flex-direction:column;
+                        align-items:center;justify-content:center;">
+                <div class="empty-icon">🔬</div>
+                <div class="empty-title">Upload an image to analyze</div>
+                <div class="empty-sub">Supports PNG, JPG, JPEG · Max 200 MB</div>
             </div>
             """, unsafe_allow_html=True)
         elif analyze_btn:
             base64_image = encode_image(uploaded_image)
-            kb_context = ""
-            metadatas = []
+            kb_context   = ""
+            metadatas    = []
 
             if use_knowledge_base_for_vision:
                 kb_context, metadatas = retrieve_context(
                     f"Technical support for visual diagnosis of {product_type}. Notes: {notes}. "
-                    "Analyze possible defects such as underproofing, overproofing, weak gluten, butter leakage, lamination breakage, shaping issues, dense crumb, tunneling, poor oven spring.",
+                    "Analyze possible defects such as underproofing, overproofing, weak gluten, butter leakage, "
+                    "lamination breakage, shaping issues, dense crumb, tunneling, poor oven spring.",
                     n_results=5
                 )
 
-            with st.spinner("Analyzing image..."):
+            with st.spinner("Analyzing image — this may take a moment…"):
                 response = client.chat.completions.create(
                     model="gpt-4.1-mini",
                     messages=[
@@ -846,15 +1146,18 @@ Use knowledge base context only to support technical reasoning.
                     ]
                 )
 
-            diagnosis = response.choices[0].message.content
+            diagnosis    = response.choices[0].message.content
             sources_text = format_sources(metadatas)
-            append_csv(VISION_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"), "image_name": uploaded_image.name, "product_type": product_type, "batch_notes": notes, "diagnosis": diagnosis, "sources": sources_text}, VISION_COLUMNS)
+            append_csv(VISION_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                       "image_name": uploaded_image.name, "product_type": product_type,
+                       "batch_notes": notes, "diagnosis": diagnosis, "sources": sources_text}, VISION_COLUMNS)
 
-            st.markdown("<div class='pl-card-title'>Vision Diagnosis</div>", unsafe_allow_html=True)
+            pl_divider("Vision Diagnosis")
             st.markdown(diagnosis)
             if use_knowledge_base_for_vision and metadatas:
                 with st.expander("📎 Knowledge sources used"):
                     st.text(sources_text)
+            st.toast("Vision analysis complete.", icon="🔬")
 
     show_history("Vision History", VISION_HISTORY_FILE, VISION_COLUMNS, "vision_history.csv")
 
@@ -864,34 +1167,45 @@ Use knowledge base context only to support technical reasoning.
 # ─────────────────────────────────────────────
 
 if mode == "Recipe R&D Generator":
+    mode_hero("⚗️", "Recipe R&D Generator",
+              "Invent technically original bakery concepts based on flavor direction, texture goals, and brand mood.",
+              "R&D")
+
     col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("<div class='pl-card-title'>Product Parameters</div>", unsafe_allow_html=True)
-        product_type = st.selectbox("Product Type", ["Croissant", "Cookie", "Brownie", "Bun", "Sourdough", "Dessert", "Other"])
-        flavor_direction = st.text_input("Flavor Direction", placeholder="Example: mango + tajin + brown butter")
-        texture_goal = st.text_input("Texture Goal", placeholder="Example: crispy shell with soft center")
-        batch_size = st.selectbox("Test Batch Size", ["6 pieces", "12 pieces", "24 pieces", "1 tray", "Small R&D batch"])
+        product_type     = st.selectbox("Product Type",
+            ["Croissant","Cookie","Brownie","Bun","Sourdough","Dessert","Other"])
+        flavor_direction = st.text_input("Flavor Direction",
+            placeholder="Example: mango + tajin + brown butter")
+        texture_goal     = st.text_input("Texture Goal",
+            placeholder="Example: crispy shell with soft center")
+        batch_size       = st.selectbox("Test Batch Size",
+            ["6 pieces","12 pieces","24 pieces","1 tray","Small R&D batch"])
 
     with col2:
         st.markdown("<div class='pl-card-title'>Creative Direction</div>", unsafe_allow_html=True)
-        constraints = st.text_area("Constraints", height=100, placeholder="Example: delivery stable, freezer stable, no wet toppings, same-day bake")
-        brand_mood = st.text_input("Brand Mood / Feeling", placeholder="Example: unexpected luxury convenience store")
-        use_kb = st.checkbox("Use knowledge base for technical support", value=True)
+        constraints = st.text_area("Constraints", height=100,
+            placeholder="Example: delivery stable, freezer stable, no wet toppings, same-day bake")
+        brand_mood  = st.text_input("Brand Mood / Feeling",
+            placeholder="Example: unexpected luxury convenience store")
+        use_kb      = st.checkbox("Use knowledge base for technical support", value=True)
 
     if st.button("⚗️ Generate R&D Concept", use_container_width=True):
         if not flavor_direction.strip():
-            st.warning("Please enter a flavor direction.")
+            st.toast("Please enter a flavor direction.", icon="⚠️")
         else:
             kb_context = ""
-            metadatas = []
+            metadatas  = []
             if use_kb:
                 kb_context, metadatas = retrieve_context(
-                    f"Generate a technically strong {product_type} concept. Flavor: {flavor_direction}. Texture: {texture_goal}. Constraints: {constraints}. Brand: {brand_mood}.",
+                    f"Generate a technically strong {product_type} concept. Flavor: {flavor_direction}. "
+                    f"Texture: {texture_goal}. Constraints: {constraints}. Brand: {brand_mood}.",
                     n_results=5
                 )
 
-            with st.spinner("Generating R&D concept..."):
+            with st.spinner("Generating R&D concept — thinking deeply…"):
                 response = client.chat.completions.create(
                     model="gpt-4.1-mini",
                     messages=[
@@ -911,17 +1225,22 @@ Be highly specific. Avoid generic pastry ideas.
                     ]
                 )
 
-            output = response.choices[0].message.content
+            output       = response.choices[0].message.content
             sources_text = format_sources(metadatas)
-            append_csv(RD_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"), "product_type": product_type, "flavor_direction": flavor_direction, "texture_goal": texture_goal, "constraints": constraints, "brand_mood": brand_mood, "batch_size": batch_size, "generated_concept": output, "sources": sources_text}, RD_COLUMNS)
+            append_csv(RD_HISTORY_FILE, {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                       "product_type": product_type, "flavor_direction": flavor_direction,
+                       "texture_goal": texture_goal, "constraints": constraints,
+                       "brand_mood": brand_mood, "batch_size": batch_size,
+                       "generated_concept": output, "sources": sources_text}, RD_COLUMNS)
 
-            st.divider()
-            st.markdown("<div class='pl-card-title'>Generated R&D Concept</div>", unsafe_allow_html=True)
+            pl_divider("Generated R&D Concept")
             st.markdown(output)
-            st.download_button(label="⬇ Download R&D Concept", data=output, file_name="proof_lab_rd_concept.md", mime="text/markdown")
+            st.download_button(label="⬇ Download R&D Concept",
+                               data=output, file_name="proof_lab_rd_concept.md", mime="text/markdown")
             if use_kb and metadatas:
                 with st.expander("📎 Knowledge sources used"):
                     st.text(sources_text)
+            st.toast("R&D concept generated.", icon="⚗️")
 
     show_history("R&D History", RD_HISTORY_FILE, RD_COLUMNS, "rd_history.csv")
 
@@ -931,39 +1250,40 @@ Be highly specific. Avoid generic pastry ideas.
 # ─────────────────────────────────────────────
 
 if mode == "Recipe Evaluator":
-    st.markdown("""
-    <div style="font-size:0.85rem;color:#9e9a93;margin-bottom:20px;line-height:1.7;">
-        Paste a test recipe and the tool will evaluate it critically using your knowledge base — covering formula balance,
-        texture feasibility, flavor logic, stability, and Proof Lab brand fit.
-    </div>
-    """, unsafe_allow_html=True)
+    mode_hero("✅", "Recipe Evaluator",
+              "Critically evaluate test recipes for formula balance, texture feasibility, and Proof Lab brand fit.",
+              "Evaluate")
 
     col1, col2 = st.columns(2)
     with col1:
-        recipe_name = st.text_input("Recipe Name", placeholder="Example: Mango Tango Cookie V1")
-        product_type = st.selectbox("Product Type", ["Croissant", "Cookie", "Brownie", "Bun", "Sourdough", "Dessert", "Other"])
+        recipe_name  = st.text_input("Recipe Name", placeholder="Example: Mango Tango Cookie V1")
+        product_type = st.selectbox("Product Type",
+            ["Croissant","Cookie","Brownie","Bun","Sourdough","Dessert","Other"])
     with col2:
-        target_outcome = st.text_area("Target Outcome", height=108, placeholder="Example: chewy center, crisp edge, stable for delivery, strong mango aroma")
+        target_outcome = st.text_area("Target Outcome", height=108,
+            placeholder="Example: chewy center, crisp edge, stable for delivery, strong mango aroma")
 
     recipe_text = st.text_area(
         "Paste Recipe / Formula / Process Notes", height=280,
-        placeholder="Example:\nButter 120g\nBrown sugar 80g\nCaster sugar 40g\nEgg 50g\nFlour 180g\nBake 180°C for 12 minutes..."
+        placeholder="Example:\nButter 120g\nBrown sugar 80g\nCaster sugar 40g\nEgg 50g\nFlour 180g\nBake 180°C for 12 minutes…"
     )
+    st.markdown("<div class='input-hint'>Paste your full formula including weights, process steps, and baking parameters</div>", unsafe_allow_html=True)
     use_kb_for_evaluation = st.checkbox("Use knowledge base for evaluation", value=True)
 
     if st.button("✅ Evaluate Recipe", use_container_width=True):
         if not recipe_text.strip():
-            st.warning("Please paste a recipe first.")
+            st.toast("Please paste a recipe first.", icon="⚠️")
         else:
             kb_context = ""
-            metadatas = []
+            metadatas  = []
             if use_kb_for_evaluation:
                 kb_context, metadatas = retrieve_context(
-                    f"Evaluate this {product_type} recipe. Name: {recipe_name}. Target: {target_outcome}. Recipe: {recipe_text}.",
+                    f"Evaluate this {product_type} recipe. Name: {recipe_name}. "
+                    f"Target: {target_outcome}. Recipe: {recipe_text}.",
                     n_results=5
                 )
 
-            with st.spinner("Evaluating recipe..."):
+            with st.spinner("Evaluating recipe — running technical analysis…"):
                 response = client.chat.completions.create(
                     model="gpt-4.1-mini",
                     messages=[
@@ -994,13 +1314,16 @@ Be direct, practical, and technically specific. If the recipe is missing key dat
                     ]
                 )
 
-            evaluation = response.choices[0].message.content
+            evaluation   = response.choices[0].message.content
             sources_text = format_sources(metadatas)
 
-            st.divider()
-            st.markdown("<div class='pl-card-title'>Recipe Evaluation</div>", unsafe_allow_html=True)
+            pl_divider("Recipe Evaluation")
             st.markdown(evaluation)
-            st.download_button(label="⬇ Download Recipe Evaluation", data=evaluation, file_name=f"{recipe_name or 'recipe_evaluation'}.md", mime="text/markdown")
+            st.download_button(label="⬇ Download Recipe Evaluation",
+                               data=evaluation,
+                               file_name=f"{recipe_name or 'recipe_evaluation'}.md",
+                               mime="text/markdown")
             if use_kb_for_evaluation and metadatas:
                 with st.expander("📎 Knowledge sources used"):
                     st.text(sources_text)
+            st.toast("Recipe evaluation complete.", icon="✅")
