@@ -400,6 +400,17 @@ html, body, [data-testid="stAppViewContainer"],
 [data-testid="stFormSubmitButton"] > button { background: linear-gradient(135deg, #9BB7D4, #5a7fa8) !important; color: #1a0f20 !important; font-weight: 700 !important; border: none !important; border-radius: 8px !important; width: 100% !important; padding: 12px !important; font-size: 0.92rem !important; }
 
 [data-testid="stChatMessage"] { background: var(--bg-card) !important; border: 1px solid var(--border) !important; border-radius: var(--radius) !important; margin-bottom: 10px !important; }
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] span,
+[data-testid="stChatMessage"] div,
+[data-testid="stChatMessage"] li,
+[data-testid="stChatMessage"] ol,
+[data-testid="stChatMessage"] ul,
+[data-testid="stChatMessage"] strong,
+[data-testid="stChatMessage"] em,
+[data-testid="stChatMessage"] code,
+[data-testid="stChatMessage"] .stMarkdown { color: #F5F0E8 !important; }
+[data-testid="stChatMessage"][data-testid] .stMarkdown p { color: #F5F0E8 !important; font-size: 0.92rem !important; line-height: 1.7 !important; }
 [data-testid="stChatInput"] > div { background: #2a1a35 !important; border: 1px solid var(--border) !important; border-radius: 12px !important; }
 [data-testid="stChatInput"] textarea { color: var(--text-primary) !important; }
 
