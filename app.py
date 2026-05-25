@@ -490,7 +490,7 @@ def extract_text_with_llamaparse(file_path):
 def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extraction_method):
     """Extract chunks from pages and batch-insert into Supabase using fast batch embedding."""
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200, chunk_overlap=200,
+        chunk_size=1600, chunk_overlap=300,
         separators=["\n# ", "\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""]
     )
     all_chunks = []
@@ -512,7 +512,7 @@ def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extract
     added_chunks, skipped_chunks = vector_store_add_batch(all_chunks)
     return added_chunks, skipped_chunks
 
-def retrieve_context(question, n_results=5):
+def retrieve_context(question, n_results=8):
     total = vector_store_count()
     if total == 0:
         return "No documents in knowledge base yet.", []
@@ -1070,7 +1070,7 @@ if mode == "Ask Knowledge Base":
             with st.chat_message("user"):
                 st.write(question)
 
-            context, metadatas = retrieve_context(question, n_results=5)
+            context, metadatas = retrieve_context(question, n_results=8)
             recent_chat_history = st.session_state.messages[-6:]
 
             messages_payload = [{"role": "system", "content": """
@@ -1148,7 +1148,7 @@ if mode == "SOP Creator":
                 metadatas = []
                 if use_knowledge_base:
                     context, metadatas = retrieve_context(
-                        f"Technical support for SOP: {product_name}. {sop_notes}", n_results=5)
+                        f"Technical support for SOP: {product_name}. {sop_notes}", n_results=8)
 
                 with st.spinner("Generating professional SOP…"):
                     response = client.chat.completions.create(
@@ -1291,7 +1291,7 @@ if mode == "Batch Tracker":
                 with st.spinner("Analyzing batch data with knowledge base support…"):
                     batch_context         = batch_df.to_string(index=False)
                     kb_context, metadatas = retrieve_context(
-                        f"Technical baking support for: {analysis_question}", n_results=5)
+                        f"Technical baking support for: {analysis_question}", n_results=8)
                     response = client.chat.completions.create(
                         model="gpt-4.1-mini",
                         messages=[
@@ -1353,7 +1353,7 @@ if mode == "Vision Analyzer":
                     f"Technical support for visual diagnosis of {product_type}. Notes: {notes}. "
                     "Analyze possible defects such as underproofing, overproofing, weak gluten, butter leakage, "
                     "lamination breakage, shaping issues, dense crumb, tunneling, poor oven spring.",
-                    n_results=5
+                    n_results=8
                 )
 
             with st.spinner("Analyzing image — this may take a moment…"):
@@ -1432,7 +1432,7 @@ if mode == "Recipe R&D Generator":
                 kb_context, metadatas = retrieve_context(
                     f"Generate a technically strong {product_type} concept. Flavor: {flavor_direction}. "
                     f"Texture: {texture_goal}. Constraints: {constraints}. Brand: {brand_mood}.",
-                    n_results=5
+                    n_results=8
                 )
 
             with st.spinner("Generating R&D concept — thinking deeply…"):
@@ -1511,7 +1511,7 @@ if mode == "Recipe Evaluator":
                 kb_context, metadatas = retrieve_context(
                     f"Evaluate this {product_type} recipe. Name: {recipe_name}. "
                     f"Target: {target_outcome}. Recipe: {recipe_text}.",
-                    n_results=5
+                    n_results=8
                 )
 
             with st.spinner("Evaluating recipe — running technical analysis…"):
