@@ -173,6 +173,24 @@ def vector_store_delete(document_title: str) -> int:
     sb.table("vector_store").delete().eq("document_title", document_title).execute()
     return count
 
+def vector_store_clear_all() -> int:
+    """Delete ALL chunks from the vector store. Returns number of deleted rows."""
+    sb = get_supabase()
+    try:
+        result = sb.table("vector_store").select("id", count="exact").execute()
+        total = result.count or 0
+        # Delete in batches to avoid timeout
+        while True:
+            batch = sb.table("vector_store").select("id").limit(500).execute()
+            if not batch.data:
+                break
+            ids = [r["id"] for r in batch.data]
+            sb.table("vector_store").delete().in_("id", ids).execute()
+        return total
+    except Exception as e:
+        st.error(f"Clear failed: {e}")
+        return 0
+
 def vector_store_count() -> int:
     """Get total chunk count."""
     sb = get_supabase()
@@ -1011,6 +1029,37 @@ if mode == "Upload Knowledge Base":
                 deleted_count = delete_document(selected_doc_up)
                 st.toast(f"Deleted {deleted_count} chunks from '{selected_doc_up}'", icon="🗑")
                 st.rerun()
+
+            pl_divider("Clear All & Rebuild")
+            st.markdown("""
+            <div style="background:#2a0a0a;border:1px solid rgba(220,60,60,0.3);border-radius:8px;padding:12px;margin-bottom:12px;">
+                <div style="font-size:0.78rem;color:#e07070;line-height:1.6;">
+                    ⚠️ <strong>This will permanently delete all documents and chunks</strong> from the knowledge base.
+                    Use this when you want to rebuild with updated chunk settings.
+                    After clearing, re-upload your PDFs to rebuild.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if "confirm_clear_all" not in st.session_state:
+                st.session_state.confirm_clear_all = False
+            if not st.session_state.confirm_clear_all:
+                if st.button("🗑 Clear All Documents", key="clear_all_btn", use_container_width=True):
+                    st.session_state.confirm_clear_all = True
+                    st.rerun()
+            else:
+                st.warning("Are you sure? This cannot be undone.")
+                col_yes, col_no = st.columns(2)
+                with col_yes:
+                    if st.button("✅ Yes, Clear Everything", key="confirm_yes", use_container_width=True):
+                        with st.spinner("Clearing all documents…"):
+                            deleted = vector_store_clear_all()
+                        st.session_state.confirm_clear_all = False
+                        st.toast(f"✅ Cleared {deleted} chunks from knowledge base", icon="🗑")
+                        st.rerun()
+                with col_no:
+                    if st.button("✕ Cancel", key="confirm_no", use_container_width=True):
+                        st.session_state.confirm_clear_all = False
+                        st.rerun()
         else:
             st.markdown("""
             <div style="text-align:center;padding:32px 0;">
