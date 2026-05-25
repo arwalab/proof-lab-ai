@@ -51,6 +51,56 @@ def vector_store_add(chunk_id: str, embedding: list, document: str, metadata: di
     }).execute()
     return True
 
+def vector_store_add_batch(chunks_data: list) -> tuple:
+    """Batch insert chunks: get all embeddings in one API call, bulk upsert to Supabase.
+    chunks_data: list of dicts with keys: id, text, document_title, page, chunk_number, extraction_method
+    Returns (added_count, skipped_count)
+    """
+    if not chunks_data:
+        return 0, 0
+    sb = get_supabase()
+    EMBED_BATCH = 100   # OpenAI allows up to 2048 inputs per call
+    UPSERT_BATCH = 50   # Supabase upsert batch size
+
+    # 1. Get all existing IDs for this document to detect duplicates
+    doc_title = chunks_data[0]["document_title"]
+    try:
+        existing_result = sb.table("vector_store").select("id").eq("document_title", doc_title).execute()
+        existing_ids = {r["id"] for r in existing_result.data}
+    except Exception:
+        existing_ids = set()
+
+    new_chunks = [c for c in chunks_data if c["id"] not in existing_ids]
+    skipped = len(chunks_data) - len(new_chunks)
+
+    if not new_chunks:
+        return 0, skipped
+
+    # 2. Batch embed all new chunks
+    all_embeddings = []
+    for i in range(0, len(new_chunks), EMBED_BATCH):
+        batch_texts = [c["text"] for c in new_chunks[i:i + EMBED_BATCH]]
+        resp = client.embeddings.create(model="text-embedding-3-small", input=batch_texts)
+        all_embeddings.extend([item.embedding for item in resp.data])
+
+    # 3. Bulk upsert to Supabase
+    rows = []
+    for chunk, emb in zip(new_chunks, all_embeddings):
+        rows.append({
+            "id": chunk["id"],
+            "embedding": emb,
+            "document": chunk["text"],
+            "document_title": chunk["document_title"],
+            "page_number": str(chunk.get("page", "")),
+            "chunk_index": chunk.get("chunk_number", 0),
+            "extraction_method": chunk.get("extraction_method", "pypdf"),
+        })
+
+    for i in range(0, len(rows), UPSERT_BATCH):
+        sb.table("vector_store").upsert(rows[i:i + UPSERT_BATCH]).execute()
+
+    return len(new_chunks), skipped
+
 def vector_store_query(query_embedding: list, n_results: int = 5):
     """Query Supabase for top-n similar chunks using pgvector cosine similarity."""
     sb = get_supabase()
@@ -413,13 +463,12 @@ def extract_text_with_llamaparse(file_path):
     return [{"page": "OCR", "text": combined_text}]
 
 def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extraction_method):
+    """Extract chunks from pages and batch-insert into Supabase using fast batch embedding."""
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1200, chunk_overlap=200,
         separators=["\n# ", "\n## ", "\n### ", "\n\n", "\n", ". ", " ", ""]
     )
-    added_chunks = 0
-    skipped_chunks = 0
-    upload_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    all_chunks = []
     for page_data in extracted_pages:
         chunks = text_splitter.split_text(page_data["text"])
         for chunk_index, chunk in enumerate(chunks):
@@ -427,20 +476,15 @@ def add_chunks_to_store(uploaded_file_name, extracted_pages, page_count, extract
                 continue
             chunk_hash = hashlib.md5(chunk.encode("utf-8")).hexdigest()
             chunk_id = f"{uploaded_file_name}_page_{page_data['page']}_{chunk_hash}"
-            embedding = client.embeddings.create(model="text-embedding-3-small", input=chunk).data[0].embedding
-            added = vector_store_add(chunk_id, embedding, chunk, {
+            all_chunks.append({
+                "id": chunk_id,
+                "text": chunk,
                 "document_title": uploaded_file_name,
                 "page": page_data["page"],
                 "chunk_number": chunk_index,
-                "chunk_hash": chunk_hash,
                 "extraction_method": extraction_method,
-                "uploaded_at": upload_time,
-                "page_count": page_count
             })
-            if added:
-                added_chunks += 1
-            else:
-                skipped_chunks += 1
+    added_chunks, skipped_chunks = vector_store_add_batch(all_chunks)
     return added_chunks, skipped_chunks
 
 def retrieve_context(question, n_results=5):
