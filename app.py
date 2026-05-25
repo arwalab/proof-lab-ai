@@ -8,7 +8,10 @@ import streamlit as st
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(): pass
 from openai import OpenAI
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
