@@ -8,17 +8,12 @@ import streamlit as st
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    def load_dotenv(): pass
 from openai import OpenAI
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from llama_parse import LlamaParse
 from supabase import create_client, Client
 
-load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 llama_api_key = os.getenv("LLAMA_CLOUD_API_KEY")
 
