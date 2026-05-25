@@ -56,11 +56,13 @@ def vector_store_add_batch(chunks_data: list) -> tuple:
     chunks_data: list of dicts with keys: id, text, document_title, page, chunk_number, extraction_method
     Returns (added_count, skipped_count)
     """
+    import time
     if not chunks_data:
         return 0, 0
     sb = get_supabase()
     EMBED_BATCH = 100   # OpenAI allows up to 2048 inputs per call
-    UPSERT_BATCH = 50   # Supabase upsert batch size
+    UPSERT_BATCH = 10   # Small batch to avoid httpx timeout on large embeddings
+    MAX_RETRIES = 3
 
     # 1. Get all existing IDs for this document to detect duplicates
     doc_title = chunks_data[0]["document_title"]
@@ -83,7 +85,7 @@ def vector_store_add_batch(chunks_data: list) -> tuple:
         resp = client.embeddings.create(model="text-embedding-3-small", input=batch_texts)
         all_embeddings.extend([item.embedding for item in resp.data])
 
-    # 3. Bulk upsert to Supabase
+    # 3. Bulk upsert to Supabase with retry logic
     rows = []
     for chunk, emb in zip(new_chunks, all_embeddings):
         rows.append({
@@ -96,10 +98,21 @@ def vector_store_add_batch(chunks_data: list) -> tuple:
             "extraction_method": chunk.get("extraction_method", "pypdf"),
         })
 
+    added = 0
     for i in range(0, len(rows), UPSERT_BATCH):
-        sb.table("vector_store").upsert(rows[i:i + UPSERT_BATCH]).execute()
+        batch = rows[i:i + UPSERT_BATCH]
+        for attempt in range(MAX_RETRIES):
+            try:
+                sb.table("vector_store").upsert(batch).execute()
+                added += len(batch)
+                break
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(2 ** attempt)  # exponential backoff: 1s, 2s, 4s
+                else:
+                    raise e
 
-    return len(new_chunks), skipped
+    return added, skipped
 
 def vector_store_query(query_embedding: list, n_results: int = 5):
     """Query Supabase for top-n similar chunks using pgvector cosine similarity."""
