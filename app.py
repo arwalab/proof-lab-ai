@@ -123,21 +123,33 @@ def vector_store_query(query_embedding: list, n_results: int = 5):
         return [], []
 
 def vector_store_get_all():
-    """Get all document metadata from Supabase for the document library."""
+    """Get all document metadata from Supabase for the document library using pagination."""
     sb = get_supabase()
     try:
-        result = sb.table("vector_store").select("id, document_title, page_number, chunk_index, created_at").execute()
         docs = {}
-        for row in result.data:
-            title = row.get("document_title", "Unknown")
-            if title not in docs:
-                docs[title] = {"document": title, "pages": set(), "chunks": 0, "uploaded_at": str(row.get("created_at", ""))[:16]}
-            docs[title]["chunks"] += 1
-            page = row.get("page_number")
-            if page and page not in ["", "N/A", "None"]:
-                docs[title]["pages"].add(str(page))
+        PAGE_SIZE = 1000
+        offset = 0
+        while True:
+            result = sb.table("vector_store") \
+                .select("id, document_title, page_number, created_at") \
+                .range(offset, offset + PAGE_SIZE - 1) \
+                .execute()
+            if not result.data:
+                break
+            for row in result.data:
+                title = row.get("document_title", "Unknown")
+                if title not in docs:
+                    docs[title] = {"document": title, "pages": set(), "chunks": 0, "uploaded_at": str(row.get("created_at", ""))[:16]}
+                docs[title]["chunks"] += 1
+                page = row.get("page_number")
+                if page and page not in ["", "N/A", "None"]:
+                    docs[title]["pages"].add(str(page))
+            if len(result.data) < PAGE_SIZE:
+                break
+            offset += PAGE_SIZE
         return [{"Document": info["document"], "Pages": len(info["pages"]), "Chunks": info["chunks"], "Uploaded": info["uploaded_at"]} for info in docs.values()]
-    except Exception:
+    except Exception as e:
+        st.warning(f"Could not load document library: {e}")
         return []
 
 def vector_store_delete(document_title: str) -> int:
