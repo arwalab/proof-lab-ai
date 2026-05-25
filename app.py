@@ -154,6 +154,10 @@ MODE_ICONS = {
 
 if "active_mode" not in st.session_state:
     st.session_state.active_mode = "Home"
+if "upload_result" not in st.session_state:
+    st.session_state.upload_result = None
+if "migration_result" not in st.session_state:
+    st.session_state.migration_result = None
 
 st.set_page_config(
     page_title=f"Proof Lab AI — {st.session_state.active_mode}",
@@ -780,6 +784,7 @@ if mode == "Upload Knowledge Base":
             """, unsafe_allow_html=True)
 
             if st.button(f"Process {len(uploaded_files)} PDF(s)", key="bulk_upload_btn", use_container_width=True):
+                st.session_state.upload_result = None
                 start_time = _time.time()
                 progress_bar = st.progress(0, text="Starting...")
                 results = []
@@ -831,11 +836,26 @@ if mode == "Upload Knowledge Base":
                 progress_bar.progress(100, text=f"✅ All {len(uploaded_files)} file(s) processed in {actual_label}!")
 
                 results_df    = pd.DataFrame(results)
-                total_added   = results_df["Added"].sum()
-                total_skipped = results_df["Skipped"].sum()
+                total_added   = int(results_df["Added"].sum())
+                total_skipped = int(results_df["Skipped"].sum())
 
-                st.toast(f"✅ Upload complete — {total_added} chunks added!", icon="📂")
+                # Store result in session state and rerun to show banner cleanly
+                st.session_state.upload_result = {
+                    "files": len(uploaded_files),
+                    "added": total_added,
+                    "skipped": total_skipped,
+                    "time": actual_label,
+                    "breakdown": results
+                }
+                st.rerun()
 
+            # Show completion banner from session state (persists after rerun)
+            if st.session_state.get("upload_result"):
+                r = st.session_state.upload_result
+                st.toast(f"✅ Upload complete — {r['added']} chunks added!", icon="📂")
+
+            if st.session_state.get("upload_result"):
+                r = st.session_state.upload_result
                 st.markdown(f"""
                 <div style="background:linear-gradient(135deg,rgba(100,200,120,0.12),rgba(44,19,50,0.7));
                             border:2px solid rgba(100,200,120,0.5);border-radius:14px;
@@ -851,19 +871,19 @@ if mode == "Upload Knowledge Base":
                     </div>
                     <div style="display:flex;gap:24px;flex-wrap:wrap;margin:14px 0 10px 0;">
                         <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
-                            <div style="font-size:1.5rem;font-weight:800;color:#FEF7CF;">{len(uploaded_files)}</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:#FEF7CF;">{r['files']}</div>
                             <div style="font-size:0.75rem;color:#9BB7D4;">Files Processed</div>
                         </div>
                         <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
-                            <div style="font-size:1.5rem;font-weight:800;color:#a8f0b8;">{total_added}</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:#a8f0b8;">{r['added']}</div>
                             <div style="font-size:0.75rem;color:#9BB7D4;">Chunks Added</div>
                         </div>
                         <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
-                            <div style="font-size:1.5rem;font-weight:800;color:#757577;">{total_skipped}</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:#757577;">{r['skipped']}</div>
                             <div style="font-size:0.75rem;color:#9BB7D4;">Duplicates Skipped</div>
                         </div>
                         <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:10px 18px;text-align:center;">
-                            <div style="font-size:1.5rem;font-weight:800;color:#9BB7D4;">{actual_label}</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:#9BB7D4;">{r['time']}</div>
                             <div style="font-size:0.75rem;color:#9BB7D4;">Time Taken</div>
                         </div>
                     </div>
@@ -872,9 +892,12 @@ if mode == "Upload Knowledge Base":
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-
+                breakdown_df = pd.DataFrame(r["breakdown"])
                 st.markdown("<div style='font-size:0.82rem;color:#9BB7D4;margin:8px 0 4px 0;font-weight:600;letter-spacing:0.05em;'>FILE BREAKDOWN</div>", unsafe_allow_html=True)
-                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
+                if st.button("✕ Dismiss", key="dismiss_upload_result"):
+                    st.session_state.upload_result = None
+                    st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
